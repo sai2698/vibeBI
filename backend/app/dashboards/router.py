@@ -100,6 +100,7 @@ async def create_dashboard(
         "grid_gap": db_dashboard.grid_gap,
         "echarts_theme": db_dashboard.echarts_theme,
         "llm_config": db_dashboard.llm_config,
+        "cache_config": db_dashboard.cache_config,
         "created_at": db_dashboard.created_at,
         "updated_at": db_dashboard.updated_at,
         "role_ids": [r.id for r in db_dashboard.roles],
@@ -176,6 +177,7 @@ async def read_dashboards(
             "grid_gap": d.grid_gap,
             "echarts_theme": d.echarts_theme,
             "llm_config": d.llm_config,
+            "cache_config": d.cache_config,
             "created_at": d.created_at,
             "updated_at": d.updated_at,
             "is_favorite": any(u.id == current_user.id for u in d.favorited_by),
@@ -240,6 +242,7 @@ async def read_dashboard(
         "row_height": dashboard.row_height,
         "echarts_theme": dashboard.echarts_theme,
         "llm_config": dashboard.llm_config,
+        "cache_config": dashboard.cache_config,
         "created_at": dashboard.created_at,
         "updated_at": dashboard.updated_at,
         "is_favorite": any(u.id == current_user.id for u in dashboard.favorited_by),
@@ -320,6 +323,7 @@ async def update_dashboard(
         "row_height": dashboard.row_height,
         "echarts_theme": dashboard.echarts_theme,
         "llm_config": dashboard.llm_config,
+        "cache_config": dashboard.cache_config,
         "created_at": dashboard.created_at,
         "updated_at": dashboard.updated_at,
         "is_favorite": any(u.id == current_user.id for u in dashboard.favorited_by),
@@ -366,3 +370,26 @@ async def delete_dashboard(
     await db.delete(dashboard)
     await db.commit()
     return None
+
+@router.post("/{dashboard_id}/clear-cache", status_code=status.HTTP_200_OK)
+async def clear_dashboard_cache(
+    dashboard_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Clear all Redis cache entries associated with a specific dashboard."""
+    from app.cache import clear_namespace
+    
+    # We don't strictly require the user to be the owner to clear the cache,
+    # as any user viewing the dashboard might want to force refresh it.
+    # But we should verify the dashboard exists and the user has access.
+    
+    result = await db.execute(select(Dashboard).where(Dashboard.id == dashboard_id))
+    dashboard = result.scalar_one_or_none()
+    if not dashboard:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+        
+    pattern = f"dashboard:{dashboard_id}:*"
+    deleted_count = await clear_namespace(pattern)
+    
+    return {"message": f"Cache cleared successfully. Removed {deleted_count} entries.", "deleted_count": deleted_count}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { X, Settings2, Palette, Image as ImageIcon, Type, Layout, Save, Shield, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Settings2, Palette, Image as ImageIcon, Type, Layout, Save, Shield, ChevronDown, ChevronRight, Zap, RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api';
 import { ECHARTS_THEMES } from '../../components/charts/themes';
 
 interface DashboardSettings {
+  id?: number;
   title: string;
   description: string;
   background_color: string;
@@ -28,6 +29,12 @@ interface DashboardSettings {
     model_name?: string;
     system_prompt?: string;
     headers?: Record<string, string>;
+  };
+  cache_config?: {
+    enable_chart_cache?: boolean;
+    chart_ttl?: number;
+    enable_filter_cache?: boolean;
+    filter_ttl?: number;
   };
 }
 
@@ -146,6 +153,22 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
   const handleLlmChange = (key: keyof NonNullable<DashboardSettings['llm_config']>, value: any) => {
     const updatedConfig = { ...(localSettings.llm_config || {}), [key]: value };
     handleChange('llm_config', updatedConfig);
+  };
+
+  const handleCacheChange = (key: keyof NonNullable<DashboardSettings['cache_config']>, value: any) => {
+    const updatedConfig = { ...(localSettings.cache_config || {}), [key]: value };
+    handleChange('cache_config', updatedConfig);
+  };
+
+  const handleClearCache = async () => {
+    if (!settings.id) return;
+    try {
+      await api.post(`/api/dashboards/${settings.id}/clear-cache`);
+      alert('Dashboard cache cleared successfully.');
+    } catch (e) {
+      console.error('Failed to clear cache', e);
+      alert('Failed to clear dashboard cache.');
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -484,6 +507,75 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
                   placeholder='{"Authorization": "Bearer ...", "x-custom-header": "value"}'
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand/20 transition-all outline-none resize-none" />
               </div>
+            </div>
+          )}
+        </div>
+        {/* Cache Settings Card */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+          <button 
+            type="button" 
+            onClick={() => setExpandedSection(expandedSection === 'cache' ? '' : 'cache')}
+            className="w-full px-4 py-3 bg-amber-500/5 dark:bg-amber-500/10 flex items-center justify-between hover:bg-amber-500/10 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-[11px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-widest">
+              <Zap size={14} /> Cache Settings
+            </div>
+            {expandedSection === 'cache' ? <ChevronDown size={14} className="text-amber-600 dark:text-amber-500" /> : <ChevronRight size={14} className="text-amber-600 dark:text-amber-500" />}
+          </button>
+          {expandedSection === 'cache' && (
+            <div className="p-4 space-y-5 border-t border-amber-500/10 animate-in slide-in-from-top-2 fade-in duration-200">
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium leading-relaxed italic">
+                Improve dashboard performance by enabling server-side caching for charts and filters.
+              </p>
+              
+              {/* Chart Cache */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Enable Chart Data Cache</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={localSettings.cache_config?.enable_chart_cache || false} onChange={e => handleCacheChange('enable_chart_cache', e.target.checked)} />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+                {localSettings.cache_config?.enable_chart_cache && (
+                  <div className="pl-2 border-l-2 border-amber-500/20">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Chart TTL (Seconds)</label>
+                    <input type="number" min="1" value={localSettings.cache_config?.chart_ttl || 3600} onChange={e => handleCacheChange('chart_ttl', parseInt(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500/20 transition-all outline-none" />
+                  </div>
+                )}
+              </div>
+
+              {/* Filter Cache */}
+              <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Enable Filter Values Cache</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={localSettings.cache_config?.enable_filter_cache || false} onChange={e => handleCacheChange('enable_filter_cache', e.target.checked)} />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+                {localSettings.cache_config?.enable_filter_cache && (
+                  <div className="pl-2 border-l-2 border-amber-500/20">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Filter TTL (Seconds)</label>
+                    <input type="number" min="1" value={localSettings.cache_config?.filter_ttl || 3600} onChange={e => handleCacheChange('filter_ttl', parseInt(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500/20 transition-all outline-none" />
+                  </div>
+                )}
+              </div>
+
+              {/* Clear Cache Button */}
+              {settings.id && (
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={handleClearCache}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    <RefreshCw size={14} /> Force Clear Dashboard Cache
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

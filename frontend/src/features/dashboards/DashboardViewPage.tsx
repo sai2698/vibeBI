@@ -108,6 +108,7 @@ interface Dashboard {
   llm_config?: any;
   co_owners?: any[];
   role_ids?: number[];
+  cache_config?: any;
 }
 
 interface FilterDef {
@@ -1675,6 +1676,7 @@ const DashboardViewPage: React.FC = () => {
           }}
           onChange={setPreviewSettings}
           settings={{
+            id: displayDashboard.id,
             title: displayDashboard.title,
             description: displayDashboard.description || '',
             background_color: displayDashboard.background_color || '#f8fafc',
@@ -1692,7 +1694,8 @@ const DashboardViewPage: React.FC = () => {
             role_ids: displayDashboard.role_ids || [],
             co_owner_ids: displayDashboard.co_owners?.map((u: any) => u.id) || [],
             echarts_theme: displayDashboard.echarts_theme || 'default',
-            llm_config: displayDashboard.llm_config || {}
+            llm_config: displayDashboard.llm_config || {},
+            cache_config: displayDashboard.cache_config || {}
           }}
           onSave={(settings) => { handleUpdateSettings(settings) }}
         />

@@ -43,12 +43,12 @@ function createSelectionStore(initial: string[]) {
     let cbs = itemListeners.get(item);
     if (!cbs) { cbs = new Set(); itemListeners.set(item, cbs); }
     cbs.add(cb);
-    return () => cbs!.delete(cb);
+    return () => { cbs!.delete(cb); };
   }
 
   function subscribeGlobal(cb: () => void) {
     globalListeners.add(cb);
-    return () => globalListeners.delete(cb);
+    return () => { globalListeners.delete(cb); };
   }
 
   function notifyItem(item: string) { itemListeners.get(item)?.forEach(cb => cb()); }
@@ -147,17 +147,22 @@ interface FilterSelectDropdownProps {
   filter: FilterDef;
   selectedValues: string[];
   onChange: (values: string[]) => void;
+  dashboardId?: string;
 }
 
 export const FilterSelectDropdown: React.FC<FilterSelectDropdownProps> = ({
   filter,
   selectedValues = [],
   onChange,
+  dashboardId,
 }) => {
   const { data: dynamicOptions, isLoading } = useQuery<string[]>({
-    queryKey: ['datasets', filter.dataset_id, 'columns', filter.value_column, 'values'],
+    queryKey: ['datasets', filter.dataset_id, 'columns', filter.value_column, 'values', dashboardId],
     queryFn: async () => {
-      const response = await api.get(`/api/datasets/${filter.dataset_id}/columns/${filter.value_column}/values`);
+      const url = dashboardId 
+        ? `/api/datasets/${filter.dataset_id}/columns/${filter.value_column}/values?dashboard_id=${dashboardId}`
+        : `/api/datasets/${filter.dataset_id}/columns/${filter.value_column}/values`;
+      const response = await api.get(url);
       return response.data;
     },
     enabled: filter.source === 'dynamic' && !!filter.dataset_id && !!filter.value_column,
@@ -442,6 +447,7 @@ interface DashboardFilterProps {
   openFilterId: string | null;
   setOpenFilterId: (id: string | null) => void;
   isMobile: boolean;
+  dashboardId?: string;
 }
 
 const DashboardFilter: React.FC<DashboardFilterProps> = ({
@@ -451,6 +457,7 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
   openFilterId,
   setOpenFilterId,
   isMobile,
+  dashboardId,
 }) => {
   // ── DOM refs for open/close (no React state, no re-render on toggle) ─────
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -560,6 +567,7 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
         {filter.type === 'select' ? (
           <FilterSelectDropdown
             filter={filter}
+            dashboardId={dashboardId}
             selectedValues={
               Array.isArray(filterValue) ? filterValue : filterValue ? [filterValue] : []
             }

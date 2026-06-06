@@ -157,6 +157,7 @@ class Dashboard(Base):
     row_height = Column(Integer, default=80)
     echarts_theme = Column(String(50), default="default")
     llm_config = Column(JSONB, default={})
+    cache_config = Column(JSONB, default={})
     search_vector = Column(TSVECTOR)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

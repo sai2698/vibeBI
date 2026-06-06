@@ -389,6 +389,7 @@ class DashboardBase(BaseModel):
     row_height: Optional[int] = 80
     echarts_theme: Optional[str] = "default"
     llm_config: Optional[dict] = {}
+    cache_config: Optional[dict] = {}
 
 class DashboardCreate(DashboardBase):
     role_ids: List[int] = []
@@ -420,6 +421,7 @@ class DashboardUpdate(BaseModel):
     llm_config: Optional[dict] = None
     role_ids: Optional[List[int]] = None
     co_owner_ids: Optional[List[UUID]] = None
+    cache_config: Optional[dict] = None
 
 class DashboardResponse(DashboardBase):
     id: int

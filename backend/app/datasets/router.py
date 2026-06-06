@@ -562,6 +562,7 @@ async def get_column_values(
     col_name: str,
     search: Optional[str] = None,
     limit: int = 20000,
+    dashboard_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -579,6 +580,27 @@ async def get_column_values(
     datasource = result.scalar_one_or_none()
     if not datasource:
         raise HTTPException(status_code=404, detail="Datasource not found")
+
+    # --- CACHE CHECK ---
+    from app.cache import get_cache, set_cache
+    import hashlib
+    
+    cache_key = None
+    cache_ttl = None
+    if dashboard_id:
+        from app.models import Dashboard
+        dash_res = await db.execute(select(Dashboard).where(Dashboard.id == dashboard_id))
+        dashboard = dash_res.scalar_one_or_none()
+        if dashboard and dashboard.cache_config and dashboard.cache_config.get("enable_filter_cache", False):
+            cache_ttl = int(dashboard.cache_config.get("filter_ttl", 3600))
+            hash_str = f"{ds_id}:{col_name}:{search or ''}:{current_user.id}"
+            payload_hash = hashlib.md5(hash_str.encode()).hexdigest()
+            cache_key = f"dashboard:{dashboard_id}:filters:{payload_hash}"
+            
+            cached_data = await get_cache(cache_key)
+            if cached_data is not None:
+                return cached_data
+    # -------------------
     
     try:
         from app.charts.utils import get_sync_uri
@@ -629,9 +651,14 @@ async def get_column_values(
         
         # Find the correct column in the dataframe (case-insensitive for Oracle/Postgres)
         res_col = next((c for c in df.columns if c.lower() == actual_col.lower()), df.columns[0] if len(df.columns) > 0 else None)
+        result_data = []
         if res_col:
-            return df[res_col].dropna().tolist()
-        return []
+            result_data = df[res_col].dropna().tolist()
+            
+        if cache_key and cache_ttl:
+            await set_cache(cache_key, result_data, cache_ttl)
+            
+        return result_data
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to fetch values: {e}")
 

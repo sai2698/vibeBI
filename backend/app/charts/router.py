@@ -181,6 +181,9 @@ async def get_chart_data(
     """Return actual data for a chart based on its query_config and optional filters."""
     from .utils import build_sql_query, get_sync_uri
     from app.rls.utils import get_applicable_rls_clauses
+    from app.cache import get_cache, set_cache
+    import hashlib
+    import json
     result = await db.execute(select(Chart).where(Chart.id == chart_id))
     chart = result.scalar_one_or_none()
     if not chart:
@@ -271,6 +274,24 @@ async def get_chart_data(
     if not sql_str:
         return {"chart_id": chart_id, "data": [], "error": "No dimensions or metrics selected"}
 
+    # --- CACHE CHECK ---
+    cache_key = None
+    cache_ttl = None
+    if req.dashboard_id:
+        from app.models import Dashboard
+        dash_res = await db.execute(select(Dashboard).where(Dashboard.id == req.dashboard_id))
+        dashboard = dash_res.scalar_one_or_none()
+        if dashboard and dashboard.cache_config and dashboard.cache_config.get("enable_chart_cache", False):
+            cache_ttl = int(dashboard.cache_config.get("chart_ttl", 3600))
+            # Create a unique hash for the query payload
+            payload_str = json.dumps({"q": query_config, "f": merged_filters, "u": str(current_user.id)}, sort_keys=True)
+            payload_hash = hashlib.md5(payload_str.encode()).hexdigest()
+            cache_key = f"dashboard:{req.dashboard_id}:chart:{chart_id}:{payload_hash}"
+            
+            cached_data = await get_cache(cache_key)
+            if cached_data:
+                return cached_data
+
     try:
         import time
         start_time = time.time()
@@ -309,7 +330,7 @@ async def get_chart_data(
             await db.commit()
         # ---------------------
         
-        return {
+        result_payload = {
             "chart_id": chart_id,
             "chart_type": chart.chart_type,
             "sql": sql_str,
@@ -322,6 +343,11 @@ async def get_chart_data(
             "has_missing_joins": has_missing_joins,
             "join_warnings": join_warnings
         }
+
+        if cache_key and cache_ttl:
+            await set_cache(cache_key, result_payload, cache_ttl)
+
+        return result_payload
     except Exception as e:
         # --- AUDIT LOGGING (ERROR) ---
         from app.audit.utils import is_audit_logging_enabled
