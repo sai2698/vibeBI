@@ -1173,52 +1173,9 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
               series={data.series}
               visualConfig={visualConfig}
               themeMeta={themeMeta}
-              onDrillContextMenu={handleReactChartContextMenu}
             />
           </div>
         </div>
-
-        {/* Drill Context Menu for KPI */}
-        {drillMenu && (
-          <DrillContextMenu
-            x={drillMenu.x}
-            y={drillMenu.y}
-            clickInfo={drillMenu.info}
-            availableColumns={availableColumns}
-            currentDimension={currentDimensionName}
-            canDrillUp={(drillStack?.length ?? 0) > 0}
-            onDrillDown={(targetCol) => {
-              const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, catVal);
-            }}
-            onDrillUp={() => onDrillUp?.()}
-            onFilterByValue={() => {
-              onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
-              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
-            }}
-            onExcludeValue={() => {
-              onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
-              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
-            }}
-            onSelectMultipleValues={() => {
-              if (echartsRef.current) {
-                echartsRef.current.dispatchAction({
-                  type: 'takeGlobalCursor',
-                  key: 'brush',
-                  brushOption: {
-                    brushType: 'rect',
-                    brushMode: 'single'
-                  }
-                });
-              }
-            }}
-            onResetDrill={(drillStack?.length ?? 0) > 0 ? onResetDrill : undefined}
-            onClose={() => {
-              setDrillMenu(null);
-              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
-            }}
-          />
-        )}
       </>
     );
   }
