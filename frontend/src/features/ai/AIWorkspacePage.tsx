@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     Send, Sparkles, AlertCircle, TrendingUp, Lightbulb,
     Terminal, ChevronLeft, History, MessageSquare,
@@ -6,7 +6,6 @@ import {
     Globe, Shield, Database, Settings, X, Check, ChevronDown, Wrench
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '../../store/useAuthStore';
 import { useLOBStore } from '../../store/useLOBStore';
 import api from '../../api';
 import { toast } from 'react-hot-toast';
@@ -18,6 +17,7 @@ import AIChatSidebar from './components/AIChatSidebar';
 import AIChatMessageList from './components/AIChatMessageList';
 import AIStreamingBlock from './components/AIStreamingBlock';
 import AIChatInput from './components/AIChatInput';
+import { useStreamingChat } from './hooks/useStreamingChat';
 
 const AIWorkspacePage: React.FC = () => {
     const queryClient = useQueryClient();
@@ -27,44 +27,26 @@ const AIWorkspacePage: React.FC = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [editingBot, setEditingBot] = useState<AIBot | null>(null);
-    const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
-    const [isStreaming, setIsStreaming] = useState(false);
     const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
     const [quickMcpName, setQuickMcpName] = useState('');
     const [quickMcpUrl, setQuickMcpUrl] = useState('');
-    const [thinkingText, setThinkingText] = useState<string | null>(null);
-    const [isThinking, setIsThinking] = useState(false);
-    const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
-    const [toolCalls, setToolCalls] = useState<{ index: number; name: string; id: string; args: string; done?: boolean }[]>([]);
-    const [toolResults, setToolResults] = useState<{ tool_call_id: string; name: string; result: string }[]>([]);
-    const chatEndRef = useRef<HTMLDivElement>(null);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const abortControllerRef = useRef<AbortController | null>(null);
 
-    // Smart Auto-scroll to bottom during streaming
-    useEffect(() => {
-        if (isStreaming && scrollContainerRef.current) {
-            const container = scrollContainerRef.current;
-            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-            if (isNearBottom) {
-                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }
-        }
-    }, [streamingMessage, thinkingText, toolCalls, toolResults, isStreaming]);
-
-    const stopStreaming = () => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-        setIsStreaming(false);
-        setStreamingMessage(null);
-        setThinkingText(null);
-        setIsThinking(false);
-        setIsThinkingExpanded(false);
-        setToolCalls([]);
-        setToolResults([]);
-    };
+    // ─── Streaming Chat Hook (replaces ~200 lines of manual streaming logic) ───
+    const {
+        streamingMessage,
+        thinkingText,
+        isStreaming,
+        isThinking,
+        isThinkingExpanded,
+        toolCalls,
+        toolResults,
+        pendingUserMessage,
+        setIsThinkingExpanded,
+        sendMessage,
+        stopStreaming,
+        chatEndRef,
+        scrollContainerRef,
+    } = useStreamingChat();
 
     const generateTitleMutation = useMutation({
         mutationFn: async ({ sessionId, message }: { sessionId: string; message: string }) => {
@@ -208,230 +190,27 @@ const AIWorkspacePage: React.FC = () => {
         setCurrentSessionId(null);
     };
 
-    const handleSend = async (userContent: string) => {
+    const handleSend = useCallback(async (userContent: string) => {
         if (!userContent.trim() || isStreaming) return;
 
-        let sessionId = currentSessionId;
-        let isNewSession = false;
-
-        if (!sessionId && selectedBot) {
-            try {
-                const newSession = await createSessionMutation.mutateAsync(selectedBot.bot_id);
-                sessionId = newSession.id;
-                isNewSession = true;
-                setCurrentSessionId(sessionId);
-            } catch (error) {
-                toast.error('Failed to start session');
-                return;
+        const resultSessionId = await sendMessage(
+            userContent,
+            currentSessionId,
+            selectedBot?.bot_id || '',
+            async () => {
+                const newSession = await createSessionMutation.mutateAsync(selectedBot?.bot_id || '');
+                setCurrentSessionId(newSession.id);
+                return newSession;
+            },
+            (sessionId, message) => {
+                generateTitleMutation.mutate({ sessionId, message });
             }
+        );
+
+        if (resultSessionId && !currentSessionId) {
+            setCurrentSessionId(resultSessionId);
         }
-
-        if (isNewSession && sessionId) {
-            // Trigger title generation in the background
-            generateTitleMutation.mutate({ sessionId, message: userContent });
-        }
-
-        if (sessionId) {
-            setIsStreaming(true);
-            setStreamingMessage('');
-            setThinkingText(null);
-            setIsThinking(false);
-            setIsThinkingExpanded(false);
-            setToolCalls([]);
-            setToolResults([]);
-
-            // Optimistically update the cache with the user's message
-            queryClient.setQueryData(['ai-sessions', sessionId], (old: any) => {
-                if (!old) return old;
-                // If it's already there (e.g. somehow), don't duplicate, but usually it's not.
-                return {
-                    ...old,
-                    messages: [
-                        ...old.messages,
-                        {
-                            id: 'temp-user-' + Date.now(),
-                            role: 'user',
-                            content: userContent,
-                            created_at: new Date().toISOString()
-                        }
-                    ]
-                };
-            });
-
-            // Unconditional scroll to bottom when sending a message
-            setTimeout(() => {
-                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }, 50);
-
-            abortControllerRef.current = new AbortController();
-
-            try {
-                const token = useAuthStore.getState().token;
-                const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-                const response = await fetch(`${baseUrl}/api/ai/sessions/${sessionId}/messages/stream`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                    },
-                    body: JSON.stringify({ content: userContent }),
-                    signal: abortControllerRef.current.signal
-                });
-
-                if (!response.ok) {
-                    const text = await response.text();
-                    let errDetail = text;
-                    try {
-                        const data = JSON.parse(text);
-                        errDetail = data.detail || text;
-                    } catch(e) {}
-                    throw new Error(`LLM Error ${response.status}: ${errDetail}`);
-                }
-
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error('ReadableStream not supported');
-
-                const decoder = new TextDecoder();
-                let buffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                        const cleaned = line.trim();
-                        if (cleaned.startsWith('data:')) {
-                            const jsonStr = cleaned.startsWith('data: ') ? cleaned.substring(6) : cleaned.substring(5);
-                            if (jsonStr.trim() === '[DONE]') {
-                                setIsThinking(false);
-                                setIsThinkingExpanded(false);
-                                setToolCalls(prev => prev.map(tc => ({ ...tc, done: true })));
-                                queryClient.invalidateQueries({ queryKey: ['ai-sessions', sessionId] });
-                                continue;
-                            }
-                            try {
-                                const data = JSON.parse(jsonStr.trim());
-                                if (data.event === 'user_message_created') {
-                                    continue;
-                                }
-
-                                // Handle tool_result SSE events from backend
-                                if (data.event === 'tool_result') {
-                                    setToolResults(prev => [...prev, { tool_call_id: data.tool_call_id, name: data.name, result: data.result }]);
-                                    setToolCalls(prev => prev.map(tc => tc.id === data.tool_call_id ? { ...tc, done: true } : tc));
-                                    continue;
-                                }
-
-                                const choice = data.choices?.[0];
-                                if (choice) {
-                                    const delta = choice.delta;
-                                    if (delta) {
-                                        // 🧠 Thinking / Reasoning (DeepSeek reasoning_content, Ollama reasoning, Anthropic thinking)
-                                        const reasoning = delta.reasoning || delta.reasoning_content || delta.thinking || "";
-                                        if (reasoning) {
-                                            setIsThinking(true);
-                                            setIsThinkingExpanded(true);
-                                            setThinkingText(prev => (prev || '') + reasoning);
-                                        }
-
-                                        // 💬 Content response
-                                        const content = delta.content || "";
-                                        if (content) {
-                                            setIsThinking(false);
-                                            setIsThinkingExpanded(false);
-                                            setStreamingMessage(prev => (prev || '') + content);
-                                        }
-
-                                        // 🔧 Tool Calls
-                                        const tcs = delta.tool_calls;
-                                        if (tcs && Array.isArray(tcs)) {
-                                            setIsThinking(false);
-                                            setIsThinkingExpanded(false);
-                                            setToolCalls(prev => {
-                                                let updated = [...prev];
-                                                for (const tc of tcs) {
-                                                    const idx = tc.index;
-                                                    const existingIndex = updated.findIndex(item => item.index === idx);
-                                                    if (existingIndex === -1) {
-                                                        updated.push({
-                                                            index: idx,
-                                                            id: tc.id || '',
-                                                            name: tc.function?.name || '',
-                                                            args: tc.function?.arguments || '',
-                                                            done: false
-                                                        });
-                                                    } else {
-                                                        const item = updated[existingIndex];
-                                                        updated[existingIndex] = {
-                                                            ...item,
-                                                            id: tc.id || item.id,
-                                                            name: tc.function?.name || item.name,
-                                                            args: item.args + (tc.function?.arguments || '')
-                                                        };
-                                                    }
-                                                }
-                                                return updated;
-                                            });
-                                        }
-                                    }
-
-                                    // Removed premature finish_reason check to allow tool_result event to control completion
-                                }
-                            } catch (e) {
-                                // Incomplete JSON chunk, skip
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error(error);
-                toast.error('Error receiving streaming response');
-            } finally {
-                // Use functional state updates to capture the absolute latest state
-                setStreamingMessage(currentMessage => {
-                    setThinkingText(currentThinking => {
-                        setToolCalls(currentTools => {
-                            setToolResults(currentResults => {
-                                queryClient.setQueryData(['ai-sessions', sessionId], (old: any) => {
-                                    if (!old) return old;
-                                    return {
-                                        ...old,
-                                        messages: [
-                                            ...old.messages,
-                                            {
-                                                id: 'temp-ai-' + Date.now(),
-                                                role: 'ai',
-                                                content: currentMessage,
-                                                reasoning_content: currentThinking,
-                                                tool_calls: currentTools.map(t => ({ id: t.id, type: 'function', name: t.name, arguments: t.args })),
-                                                tool_results: currentResults,
-                                                created_at: new Date().toISOString()
-                                            }
-                                        ]
-                                    };
-                                });
-                                return [];
-                            });
-                            return [];
-                        });
-                        return null;
-                    });
-                    return '';
-                });
-
-                setIsStreaming(false);
-                setIsThinking(false);
-                setIsThinkingExpanded(false);
-                queryClient.invalidateQueries({ queryKey: ['ai-sessions', sessionId] });
-                queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
-            }
-        }
-    };
+    }, [isStreaming, currentSessionId, selectedBot, sendMessage, createSessionMutation, generateTitleMutation]);
 
     const formatTime = (dateStr: string) => {
         return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -684,7 +463,7 @@ const AIWorkspacePage: React.FC = () => {
                             </div>
                         ) : (
                             <>
-                                {(!currentSession || currentSession.messages.length === 0) && (
+                                {(!currentSession || currentSession.messages.length === 0) && !pendingUserMessage && (
                                     <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto p-8 animate-in zoom-in-95 duration-500">
                                         <div className="relative mb-8 group">
                                             <div className={`absolute inset-0 blur-2xl rounded-full group-hover:opacity-70 transition-opacity duration-500 opacity-50 ${activeBot.avatar_config.color}`} />
@@ -701,6 +480,22 @@ const AIWorkspacePage: React.FC = () => {
                                 
                                 {currentSession && (
                                     <AIChatMessageList messages={currentSession.messages} activeBot={activeBot} />
+                                )}
+
+                                {/* Instant pending user message (shown before session creation / API response) */}
+                                {pendingUserMessage && (
+                                    <div className="w-full flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-200">
+                                        <div className="flex gap-4 w-full max-w-3xl">
+                                            <div className="shrink-0 w-8 h-8 mt-1 rounded-xl flex items-center justify-center shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                <User size={16} />
+                                            </div>
+                                            <div className="space-y-1.5 min-w-0 flex-1">
+                                                <div className="rounded-2xl px-6 py-4 leading-relaxed bg-slate-50 dark:bg-slate-800/40 text-slate-800 dark:text-slate-200">
+                                                    <p className="text-[13px]">{pendingUserMessage}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
 
                                 {isStreaming && (
@@ -725,9 +520,6 @@ const AIWorkspacePage: React.FC = () => {
                         isStreaming={isStreaming || createSessionMutation.isPending}
                         onSend={handleSend}
                         onStopStreaming={stopStreaming}
-                        onToggleSqlTool={(botId, enableSql) => toggleSqlToolMutation.mutate({ botId, enableSql })}
-                        onAddMcp={(botId, server) => addQuickMcpMutation.mutate({ botId, name: server.name, url: server.url })}
-                        onRemoveMcp={(botId, index) => removeQuickMcpMutation.mutate({ botId, index })}
                     />
                 </div>
             </div>

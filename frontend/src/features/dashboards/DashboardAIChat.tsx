@@ -1,14 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '../../store/useAuthStore';
 import api from '../../api';
 import { toast } from 'react-hot-toast';
-import { Brain, X, Loader2 } from 'lucide-react';
+import { Brain, X, Loader2, User } from 'lucide-react';
 
 import type { AIBot, ChatSession } from '../ai/components/types';
 import AIChatMessageList from '../ai/components/AIChatMessageList';
 import AIStreamingBlock from '../ai/components/AIStreamingBlock';
 import AIChatInput from '../ai/components/AIChatInput';
+import { useStreamingChat } from '../ai/hooks/useStreamingChat';
 
 interface DashboardAIChatProps {
   isOpen: boolean;
@@ -27,48 +27,29 @@ const DashboardAIChat: React.FC<DashboardAIChatProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  
-  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [thinkingText, setThinkingText] = useState<string | null>(null);
-  const [isThinking, setIsThinking] = useState(false);
-  const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
-  const [toolCalls, setToolCalls] = useState<{ index: number; name: string; id: string; args: string; done?: boolean }[]>([]);
-  const [toolResults, setToolResults] = useState<{ tool_call_id: string; name: string; result: string }[]>([]);
-  
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Smart Auto-scroll to bottom during streaming
-  useEffect(() => {
-    if (isStreaming && scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-      if (isNearBottom) {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+  // ─── Streaming Chat Hook ───────────────────────────────────────────────────
+  const {
+    streamingMessage,
+    thinkingText,
+    isStreaming,
+    isThinking,
+    isThinkingExpanded,
+    toolCalls,
+    toolResults,
+    pendingUserMessage,
+    setIsThinkingExpanded,
+    sendMessage,
+    stopStreaming,
+    chatEndRef,
+    scrollContainerRef,
+  } = useStreamingChat({
+    extraBody: {
+      context_dataset_ids: contextDatasetIds,
+      llm_config_override: llmConfigOverride,
+      dashboard_name: dashboardName,
     }
-  }, [streamingMessage, thinkingText, toolCalls, toolResults, isStreaming]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => stopStreaming();
-  }, []);
-
-  const stopStreaming = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setIsStreaming(false);
-    setStreamingMessage(null);
-    setThinkingText(null);
-    setIsThinking(false);
-    setIsThinkingExpanded(false);
-    setToolCalls([]);
-    setToolResults([]);
-  };
+  });
 
   const generateTitleMutation = useMutation({
     mutationFn: async ({ sessionId, message }: { sessionId: string; message: string }) => {
@@ -114,225 +95,27 @@ const DashboardAIChat: React.FC<DashboardAIChatProps> = ({
     enabled: !!currentSessionId
   });
 
-  const handleSend = async (userContent: string) => {
+  const handleSend = useCallback(async (userContent: string) => {
     if (!userContent.trim() || isStreaming) return;
 
-    let sessionId = currentSessionId;
-    let isNewSession = false;
-
-    if (!sessionId) {
-      try {
+    const resultSessionId = await sendMessage(
+      userContent,
+      currentSessionId,
+      activeBot.bot_id,
+      async () => {
         const newSession = await createSessionMutation.mutateAsync(activeBot.bot_id);
-        sessionId = newSession.id;
-        isNewSession = true;
-        setCurrentSessionId(sessionId);
-      } catch (error) {
-        toast.error('Failed to start session');
-        return;
+        setCurrentSessionId(newSession.id);
+        return newSession;
+      },
+      (sessionId, message) => {
+        generateTitleMutation.mutate({ sessionId, message });
       }
+    );
+
+    if (resultSessionId && !currentSessionId) {
+      setCurrentSessionId(resultSessionId);
     }
-
-    if (isNewSession && sessionId) {
-      generateTitleMutation.mutate({ sessionId, message: userContent });
-    }
-
-    if (sessionId) {
-      setIsStreaming(true);
-      setStreamingMessage('');
-      setThinkingText(null);
-      setIsThinking(false);
-      setIsThinkingExpanded(false);
-      setToolCalls([]);
-      setToolResults([]);
-
-      queryClient.setQueryData(['ai-sessions', sessionId], (old: any) => {
-        if (!old) return old;
-        return {
-          ...old,
-          messages: [
-            ...old.messages,
-            {
-              id: 'temp-user-' + Date.now(),
-              role: 'user',
-              content: userContent,
-              created_at: new Date().toISOString()
-            }
-          ]
-        };
-      });
-
-      // Unconditional scroll to bottom when sending a message
-      setTimeout(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 50);
-
-      abortControllerRef.current = new AbortController();
-
-      try {
-        const token = useAuthStore.getState().token;
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-        const response = await fetch(`${baseUrl}/api/ai/sessions/${sessionId}/messages/stream`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({ 
-            content: userContent,
-            context_dataset_ids: contextDatasetIds,
-            llm_config_override: llmConfigOverride,
-            dashboard_name: dashboardName
-          }),
-          signal: abortControllerRef.current.signal
-        });
-
-        if (!response.ok) {
-          const text = await response.text();
-          let errDetail = text;
-          try {
-            const data = JSON.parse(text);
-            errDetail = data.detail || text;
-          } catch(e) {}
-          throw new Error(`LLM Error ${response.status}: ${errDetail}`);
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error('ReadableStream not supported');
-
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const cleaned = line.trim();
-            if (cleaned.startsWith('data:')) {
-              const jsonStr = cleaned.startsWith('data: ') ? cleaned.substring(6) : cleaned.substring(5);
-              if (jsonStr.trim() === '[DONE]') {
-                setIsThinking(false);
-                setIsThinkingExpanded(false);
-                setToolCalls(prev => prev.map(tc => ({ ...tc, done: true })));
-                queryClient.invalidateQueries({ queryKey: ['ai-sessions', sessionId] });
-                continue;
-              }
-              try {
-                const data = JSON.parse(jsonStr.trim());
-                if (data.event === 'user_message_created') continue;
-
-                if (data.event === 'tool_result') {
-                  setToolResults(prev => [...prev, { tool_call_id: data.tool_call_id, name: data.name, result: data.result }]);
-                  setToolCalls(prev => prev.map(tc => tc.id === data.tool_call_id ? { ...tc, done: true } : tc));
-                  continue;
-                }
-
-                const choice = data.choices?.[0];
-                if (choice) {
-                  const delta = choice.delta;
-                  if (delta) {
-                    const reasoning = delta.reasoning || delta.reasoning_content || delta.thinking || "";
-                    if (reasoning) {
-                      setIsThinking(true);
-                      setIsThinkingExpanded(true);
-                      setThinkingText(prev => (prev || '') + reasoning);
-                    }
-
-                    const content = delta.content || "";
-                    if (content) {
-                      setIsThinking(false);
-                      setIsThinkingExpanded(false);
-                      setStreamingMessage(prev => (prev || '') + content);
-                    }
-
-                    const tcs = delta.tool_calls;
-                    if (tcs && Array.isArray(tcs)) {
-                      setIsThinking(false);
-                      setIsThinkingExpanded(false);
-                      setToolCalls(prev => {
-                        let updated = [...prev];
-                        for (const tc of tcs) {
-                          const idx = tc.index;
-                          const existingIndex = updated.findIndex(item => item.index === idx);
-                          if (existingIndex === -1) {
-                            updated.push({
-                              index: idx,
-                              id: tc.id || '',
-                              name: tc.function?.name || '',
-                              args: tc.function?.arguments || '',
-                              done: false
-                            });
-                          } else {
-                            const item = updated[existingIndex];
-                            updated[existingIndex] = {
-                              ...item,
-                              id: tc.id || item.id,
-                              name: tc.function?.name || item.name,
-                              args: item.args + (tc.function?.arguments || '')
-                            };
-                          }
-                        }
-                        return updated;
-                      });
-                    }
-                  }
-                }
-              } catch (e) {
-                // Ignore parsing errors for incomplete chunks
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error(error);
-        if ((error as any).name !== 'AbortError') {
-          toast.error('Error receiving streaming response');
-        }
-      } finally {
-        setStreamingMessage(currentMessage => {
-          setThinkingText(currentThinking => {
-            setToolCalls(currentTools => {
-              setToolResults(currentResults => {
-                queryClient.setQueryData(['ai-sessions', sessionId], (old: any) => {
-                  if (!old) return old;
-                  return {
-                    ...old,
-                    messages: [
-                      ...old.messages,
-                      {
-                        id: 'temp-ai-' + Date.now(),
-                        role: 'ai',
-                        content: currentMessage,
-                        reasoning_content: currentThinking,
-                        tool_calls: currentTools.map(t => ({ id: t.id, type: 'function', name: t.name, arguments: t.args })),
-                        tool_results: currentResults,
-                        created_at: new Date().toISOString()
-                      }
-                    ]
-                  };
-                });
-                return [];
-              });
-              return [];
-            });
-            return null;
-          });
-          return '';
-        });
-
-        setIsStreaming(false);
-        setIsThinking(false);
-        setIsThinkingExpanded(false);
-        queryClient.invalidateQueries({ queryKey: ['ai-sessions', sessionId] });
-        queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
-      }
-    }
-  };
+  }, [isStreaming, currentSessionId, sendMessage, createSessionMutation, generateTitleMutation, activeBot.bot_id]);
 
   if (!isOpen) return null;
 
@@ -376,7 +159,7 @@ const DashboardAIChat: React.FC<DashboardAIChatProps> = ({
               </div>
             ) : (
               <>
-                {(!currentSession || currentSession.messages.length === 0) && (
+                {(!currentSession || currentSession.messages.length === 0) && !pendingUserMessage && (
                   <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto p-8 animate-in zoom-in-95 duration-500">
                     <div className="relative mb-8 group">
                       <div className="absolute inset-0 bg-brand/20 blur-2xl rounded-full group-hover:bg-brand/30 transition-colors duration-500" />
@@ -393,6 +176,22 @@ const DashboardAIChat: React.FC<DashboardAIChatProps> = ({
                 
                 {currentSession && (
                   <AIChatMessageList messages={currentSession.messages} activeBot={activeBot} />
+                )}
+
+                {/* Instant pending user message */}
+                {pendingUserMessage && (
+                  <div className="w-full flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-200">
+                    <div className="flex gap-4 w-full max-w-3xl">
+                      <div className="shrink-0 w-8 h-8 mt-1 rounded-xl flex items-center justify-center shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700">
+                        <User size={16} />
+                      </div>
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="rounded-2xl px-6 py-4 leading-relaxed bg-slate-50 dark:bg-slate-800/40 text-slate-800 dark:text-slate-200">
+                          <p className="text-[13px]">{pendingUserMessage}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {isStreaming && (
