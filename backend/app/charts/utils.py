@@ -337,7 +337,32 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                 sql += where_clause
             if group_by:
                 sql += f" GROUP BY {', '.join(group_by)}"
-            sql += f" LIMIT {limit}"
+            
+            # ORDER BY (Superset-style: explicit or auto-sort by first metric DESC)
+            order_by = query_config.get("orderBy", [])
+            if order_by:
+                order_parts = []
+                for ob in order_by:
+                    col = ob.get("column", "")
+                    direction = ob.get("direction", "DESC").upper()
+                    if direction not in ("ASC", "DESC"):
+                        direction = "DESC"
+                    if col:
+                        order_parts.append(f'"{ col }" {direction}')
+                if order_parts:
+                    sql += f" ORDER BY {', '.join(order_parts)}"
+            elif group_by and select_cols:
+                # Default: order by first aggregate metric DESC
+                for sc in select_cols:
+                    if any(agg in sc.upper() for agg in ['SUM(', 'AVG(', 'COUNT(', 'MIN(', 'MAX(']):
+                        alias = sc.split(' AS ')[-1].strip().strip('"')
+                        sql += f' ORDER BY "{alias}" DESC'
+                        break
+            
+            if is_oracle:
+                sql += f" FETCH FIRST {limit} ROWS ONLY"
+            else:
+                sql += f" LIMIT {limit}"
             
             # Beautify the SQL
             sql = beautify_sql(sql)
@@ -568,6 +593,27 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
     
     if group_by:
         sql_str += f" GROUP BY {', '.join(group_by)}"
+    
+    # ORDER BY (Superset-style: explicit or auto-sort by first metric DESC)
+    order_by = query_config.get("orderBy", [])
+    if order_by:
+        order_parts = []
+        for ob in order_by:
+            col = ob.get("column", "")
+            direction = ob.get("direction", "DESC").upper()
+            if direction not in ("ASC", "DESC"):
+                direction = "DESC"
+            if col:
+                order_parts.append(f'"{ col }" {direction}')
+        if order_parts:
+            sql_str += f" ORDER BY {', '.join(order_parts)}"
+    elif group_by and select_cols:
+        # Default: order by first aggregate metric DESC
+        for sc in select_cols:
+            if any(agg in sc.upper() for agg in ['SUM(', 'AVG(', 'COUNT(', 'MIN(', 'MAX(']):
+                alias = sc.split(' AS ')[-1].strip().strip('"')
+                sql_str += f' ORDER BY "{alias}" DESC'
+                break
     
     if is_oracle:
         sql_str += f" FETCH FIRST {limit} ROWS ONLY"

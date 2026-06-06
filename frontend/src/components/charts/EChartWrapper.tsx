@@ -65,6 +65,7 @@ export type ChartType =
 
 interface ChartData {
   categories?: string[];
+  xAxisCategories?: string[];   // Used by heatmap for X-axis labels
   dimensions?: Array<{ name: string; data: any[] }>;
   series: Array<{
     name: string;
@@ -302,7 +303,8 @@ function buildOption(chartType: ChartType, dataInput: ChartData, _title?: string
 
     case 'heatmap':
       return buildHeatmapChartOptions({
-        categories: data.categories,
+        categories: data.categories ?? [],
+        xAxisCategories: data.xAxisCategories ?? [],
         series: data.series as any,
         visualConfig: {
           ...visualConfig,
@@ -933,23 +935,39 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
   const visualConfigString = JSON.stringify(visualConfig);
 
   const mergedOption = useMemo(() => {
-    const baseOpt = buildOption(chartType, data, title, visualConfig, theme, themeMeta);
-    
-    // Add brush to baseOpt if it's a Cartesian chart
-    if (CARTESIAN_CHART_TYPES.has(chartType)) {
-      baseOpt.brush = {
-        toolbox: [],
-        xAxisIndex: 'all',
-        yAxisIndex: 'all',
-      };
-      // Note: we intentionally do NOT force toolbox.show = true here.
-      // We trigger the brush programmatically from the DrillContextMenu.
-    }
+    try {
+      const baseOpt = buildOption(chartType, data, title, visualConfig, theme, themeMeta);
+      
+      // Add brush to baseOpt if it's a Cartesian chart
+      if (CARTESIAN_CHART_TYPES.has(chartType)) {
+        baseOpt.brush = {
+          toolbox: [],
+          xAxisIndex: 'all',
+          yAxisIndex: 'all',
+        };
+        // Note: we intentionally do NOT force toolbox.show = true here.
+        // We trigger the brush programmatically from the DrillContextMenu.
+      }
 
-    return {
-      ...baseOpt,
-      backgroundColor: visualConfig?.backgroundColor || themeMeta?.background || '#fff',
-    };
+      return {
+        ...baseOpt,
+        backgroundColor: visualConfig?.backgroundColor || themeMeta?.background || '#fff',
+      };
+    } catch (err) {
+      console.error('[EChartWrapper] buildOption failed:', err);
+      // Return a minimal valid option so ECharts doesn't crash
+      return {
+        title: {
+          text: 'Chart rendering error',
+          subtext: err instanceof Error ? err.message : 'Unknown error',
+          left: 'center',
+          top: 'center',
+          textStyle: { color: '#ef4444', fontSize: 14 },
+          subtextStyle: { color: '#94a3b8', fontSize: 12 },
+        },
+        backgroundColor: visualConfig?.backgroundColor || themeMeta?.background || '#fff',
+      };
+    }
   }, [chartType, dataString, title, visualConfigString, theme, themeMeta]);
 
   // Render React-based chart components (not ECharts)

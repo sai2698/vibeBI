@@ -8,12 +8,12 @@ import {
 type EChartsOption = echarts.EChartsOption;
 
 export interface HeatmapChartOptions {
-  categories: string[]; // Y-axis labels
+  categories: string[]; // Y-axis labels (row dimension values)
   series: Array<{
     name: string;
-    data: Array<[number, number, number]>; // [x, y, value]
+    data: Array<[number, number, number]>; // [xIndex, yIndex, value]
   }>;
-  xAxisCategories?: string[]; // X-axis labels
+  xAxisCategories?: string[]; // X-axis labels (column dimension values)
   visualConfig?: {
     x_axis?: {
       title?: string;
@@ -153,60 +153,75 @@ export const heatmapChartConfigSchema: ChartConfigSchema = createChartConfigSche
 });
 
 export function buildHeatmapChartOptions({
-  categories,
-  series,
+  categories = [],
+  series = [],
   xAxisCategories = [],
   visualConfig = {},
 }: HeatmapChartOptions): EChartsOption {
   const cfg = visualConfig;
 
-  // Transform data into heatmap format
+  // Collect all heatmap data points from all series
   const heatmapData = series.flatMap((s) => {
-    return s.data.map(([x, y, value]) => [x, y, value]);
+    if (!s.data || !Array.isArray(s.data)) return [];
+    return s.data.map(item => {
+      // Handle both array-style [x, y, val] and possible object-style
+      if (Array.isArray(item) && item.length >= 3) {
+        return [item[0], item[1], item[2]];
+      }
+      return item;
+    });
   });
+
+  // Use xAxisCategories for X-axis; fallback to categories if not provided
+  const xLabels = xAxisCategories.length > 0 ? xAxisCategories : categories;
+  const yLabels = categories;
+
+  // Safely compute max value (guard against empty arrays)
+  const numericValues = heatmapData
+    .map(d => (Array.isArray(d) ? Number(d[2]) : 0))
+    .filter(v => !isNaN(v) && isFinite(v));
+  const maxVal = numericValues.length > 0 ? Math.max(...numericValues) : 1;
+  const minVal = numericValues.length > 0 ? Math.min(...numericValues) : 0;
 
   return {
     tooltip: {
       position: 'top',
       formatter: (params: any) => {
-        if (Array.isArray(params)) {
-          const p = params[0];
-          const x = xAxisCategories[p.data[0]] ?? p.data[0];
-          const y = categories[p.data[1]] ?? p.data[1];
-          return `${x} x ${y}: ${p.data[2]}`;
-        }
-        return '';
+        const p = Array.isArray(params) ? params[0] : params;
+        if (!p || !p.data) return '';
+        const xIdx = p.data[0];
+        const yIdx = p.data[1];
+        const val = p.data[2];
+        const xLabel = xLabels[xIdx] ?? xIdx;
+        const yLabel = yLabels[yIdx] ?? yIdx;
+        return `<div style="font-size:12px">
+          <strong>${yLabel}</strong> × <strong>${xLabel}</strong><br/>
+          Value: <strong>${val != null ? val : '—'}</strong>
+        </div>`;
       },
-    },
-    legend: {
-      show: getConfigValue(cfg, 'legend.show') ?? true,
-      orient: 'vertical',
-      top: getConfigValue(cfg, 'legend.position') === 'top' ? 0 : undefined,
-      bottom: getConfigValue(cfg, 'legend.position') === 'bottom' ? 0 : undefined,
-      left: getConfigValue(cfg, 'legend.position') === 'left' ? 0 : undefined,
-      right: getConfigValue(cfg, 'legend.position') === 'right' ? 0 : undefined,
     },
     grid: {
       left: '8%',
       right: getConfigValue(cfg, 'legend.show') ?? true ? '12%' : '4%',
-      bottom: '8%',
+      bottom: '15%',
       top: '8%',
       containLabel: true,
     },
     xAxis: {
       type: 'category',
-      data: xAxisCategories.length > 0 ? xAxisCategories : categories,
+      data: xLabels,
       splitArea: {
         show: true,
       },
       name: getConfigValue(cfg, 'x_axis.title'),
       axisLabel: {
         overflow: getConfigValue(cfg, 'x_axis.truncate') ? 'truncate' : 'break',
+        rotate: xLabels.length > 10 ? 30 : 0,
       },
     },
     yAxis: {
       type: 'category',
-      data: categories,
+      data: yLabels,
       splitArea: {
         show: true,
       },
@@ -221,23 +236,28 @@ export function buildHeatmapChartOptions({
       orient: 'horizontal',
       left: 'center',
       bottom: '0%',
-      min: 0,
-      max: Math.max(...heatmapData.map((d) => d[2] as number)),
+      min: minVal,
+      max: maxVal,
       inRange: {
-        color: visualConfig?.colorPalette || ['#e0f2fe', '#0284c7'],
+        color: visualConfig?.colorPalette?.length >= 2
+          ? [visualConfig.colorPalette[0], visualConfig.colorPalette[visualConfig.colorPalette.length - 1]]
+          : ['#e0f2fe', '#0284c7'],
       },
     },
     series: [
       {
-        name: 'Heatmap',
+        name: series[0]?.name || 'Heatmap',
         type: 'heatmap',
         data: heatmapData,
         label: {
           show: getConfigValue(cfg, 'heatmap.showLabel') ?? true,
           formatter: getConfigValue(cfg, 'heatmap.labelFormat') ?? '{c}',
+          fontSize: 10,
         },
         itemStyle: {
           borderRadius: getConfigValue(cfg, 'heatmap.cellRadius') ?? 2,
+          borderColor: '#fff',
+          borderWidth: 1,
         },
         emphasis: {
           itemStyle: {

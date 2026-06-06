@@ -1,6 +1,7 @@
 
 export interface ChartData {
   categories?: string[];
+  xAxisCategories?: string[];   // Used by heatmap for X-axis labels
   dimensions?: Array<{ name: string; data: any[] }>;
   series: Array<{
     name: string;
@@ -25,9 +26,55 @@ export const transformChartData = (
     return item.alias || item.name;
   };
 
+  // ── Heatmap ──
+  // Produces [x, y, value] triplets with separate xAxisCategories / yAxisCategories
+  if (chartType === 'heatmap') {
+    const rowDimNames = dimensions.map(getDisplayName);
+    const colDimNames = (pivotColumns || []).map(getDisplayName);
 
+    // Fallback: if no pivotColumns but ≥2 row dims, pop the last one as column dim
+    if (colDimNames.length === 0 && rowDimNames.length >= 2) {
+      colDimNames.push(rowDimNames.pop()!);
+    }
 
-  // Pie, Donut, Funnel, Treemap, Sunburst
+    if (rowDimNames.length > 0 && colDimNames.length > 0 && metrics.length > 0) {
+      const mDisplay = getDisplayName(metrics[0]);
+
+      // Y-axis: unique row dimension value combinations
+      const yCategories = [...new Set(resData.map(row =>
+        rowDimNames.map(d => String(row[d] ?? '')).join(' - ')
+      ))];
+
+      // X-axis: unique column dimension value combinations
+      const xCategories = [...new Set(resData.map(row =>
+        colDimNames.map(d => String(row[d] ?? '')).join(' - ')
+      ))];
+
+      // Build [xIndex, yIndex, value] triplets
+      const heatmapData: [number, number, number][] = [];
+      resData.forEach(row => {
+        const yKey = rowDimNames.map(d => String(row[d] ?? '')).join(' - ');
+        const xKey = colDimNames.map(d => String(row[d] ?? '')).join(' - ');
+        const xIdx = xCategories.indexOf(xKey);
+        const yIdx = yCategories.indexOf(yKey);
+        const val = Number(row[mDisplay]) || 0;
+        if (xIdx >= 0 && yIdx >= 0) {
+          heatmapData.push([xIdx, yIdx, val]);
+        }
+      });
+
+      return {
+        categories: yCategories,           // Y-axis labels
+        xAxisCategories: xCategories,      // X-axis labels
+        series: [{ name: mDisplay, data: heatmapData }],
+      };
+    }
+
+    // Insufficient config fallback
+    return { series: [] };
+  }
+
+  // ── Pie, Donut, Funnel, Treemap, Sunburst ──
   if (['pie', 'donut', 'funnel', 'treemap', 'sunburst'].includes(chartType)) {
     const firstMet = metrics[0];
     const mDisplay = firstMet ? getDisplayName(firstMet) : null;
@@ -40,22 +87,18 @@ export const transformChartData = (
     };
   }
 
-  // KPI
+  // ── KPI ──
   if (chartType === 'kpi') {
     const firstMet = metrics[0];
     const mDisplay = firstMet ? getDisplayName(firstMet) : 'Value';
     
-    // Try to find the value from the first row using the metric name
-    // Backend might return column names like "count_INTEGRATION_ID" or "sum_column"
     let value = 0;
     if (resData.length > 0) {
       const firstRow = resData[0];
       
-      // Try the display name first
       if (firstRow[mDisplay] !== undefined) {
         value = Number(firstRow[mDisplay]) || 0;
       } else {
-        // Fallback: try to find any numeric value in the row
         const numericValue = Object.values(firstRow).find(v => typeof v === 'number');
         if (numericValue !== undefined) {
           value = numericValue;
@@ -68,20 +111,15 @@ export const transformChartData = (
     };
   }
 
-  // Heatmap & Pivot
-  if (chartType === 'heatmap' || chartType === 'pivot') {
+  // ── Pivot ──
+  if (chartType === 'pivot') {
     const rowDimNames = dimensions.map(getDisplayName);
     const colDimNames = (pivotColumns || []).map(getDisplayName);
-    
-    // Fallback for heatmap if pivotColumns is empty
-    if (chartType === 'heatmap' && colDimNames.length === 0 && rowDimNames.length >= 2) {
-      colDimNames.push(rowDimNames.pop()!);
-    }
 
     if (rowDimNames.length > 0 && metrics.length > 0) {
       const mDisplay = getDisplayName(metrics[0]);
 
-      // 1. Identify unique rows (concatenated values of all row dimensions)
+      // 1. Identify unique rows
       const rowMap = new Map<string, any[]>();
       resData.forEach(row => {
           const key = rowDimNames.map(d => String(row[d] ?? '')).join('|||');
@@ -127,7 +165,7 @@ export const transformChartData = (
     }
   }
 
-  // Calendar
+  // ── Calendar ──
   if (chartType === 'calendar') {
     const firstMet = metrics[0];
     const mDisplay = firstMet ? getDisplayName(firstMet) : null;
@@ -141,8 +179,8 @@ export const transformChartData = (
     };
   }
 
-  // DataTable & PivotTable - use the same format as default but ensure dimensions are properly structured
-  if (chartType === 'table' || chartType === 'pivot') {
+  // ── DataTable & PivotTable — use the same format as default but ensure dimensions are properly structured ──
+  if (chartType === 'table') {
     const categories = resData.map((row: any) =>
       dimensions.map(d => String(row[getDisplayName(d)] ?? '')).join(' - ')
     );
@@ -170,7 +208,7 @@ export const transformChartData = (
     };
   }
 
-  // Default (Bar, Line, Area, etc.)
+  // ── Default (Bar, Line, Area, Scatter, etc.) ──
   const categories = resData.map((row: any) =>
     dimensions.map(d => String(row[getDisplayName(d)] ?? '')).join(' - ')
   );

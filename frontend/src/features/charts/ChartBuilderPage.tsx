@@ -14,10 +14,13 @@ import {
   Activity, Layout, Edit3, Filter, Trash2, Plus,
   Box, Share2, GitBranch, Grid, Disc, Columns,
   GitPullRequest, Gauge, AlignLeft, Calendar,
-  Layers, Table as TableIcon, LayoutGrid, Loader2, Folder, FileCode2, SaveAll, Settings2
+  Layers, Table as TableIcon, LayoutGrid, Loader2, Folder, FileCode2, SaveAll, Settings2,
+  AlertTriangle, AlertCircle, ArrowUpDown, CalendarDays
 } from 'lucide-react';
 import SaveAssetModal from './components/SaveAssetModal';
 import DynamicChartControls from './components/DynamicChartControls';
+import SortableShelf from './components/SortableShelf';
+import ChartErrorBoundary from '../../components/charts/ChartErrorBoundary';
 import { useDrillDown } from '../../components/charts/useDrillDown';
 
 const PALETTES = {
@@ -58,22 +61,129 @@ const chartTypes: { type: ChartType; label: string; icon: React.ReactNode }[] = 
   { type: 'pivot', label: 'Pivot Table', icon: <LayoutGrid size={18} /> },
 ];
 
-const CHART_REQUIREMENTS: Record<string, { minDim: number; maxDim?: number; minMet: number; msg: string }> = {
-  kpi: { minDim: 0, maxDim: 0, minMet: 1, msg: 'KPI needs 1 measure' },
-  table: { minDim: 1, minMet: 0, msg: 'Table needs 1+ dimensions or measures' },
-  pivot: { minDim: 1, minMet: 1, msg: 'Pivot needs 1+ dimensions & 1 measure' },
-  bar: { minDim: 1, minMet: 1, msg: 'Bar needs 1 dimension & 1+ measures' },
-  line: { minDim: 1, minMet: 1, msg: 'Line needs 1 dimension & 1+ measures' },
-  pie: { minDim: 1, maxDim: 1, minMet: 1, msg: 'Pie needs 1 dimension & 1 measure' },
-  scatter: { minDim: 0, minMet: 2, msg: 'Scatter needs 2+ measures' },
-  heatmap: { minDim: 2, maxDim: 2, minMet: 1, msg: 'Heatmap needs 2 dimensions & 1 measure' },
-  treemap: { minDim: 1, minMet: 1, msg: 'Treemap needs 1 dimension & 1 measure' },
-  sunburst: { minDim: 1, minMet: 1, msg: 'Sunburst needs 1 dimension & 1 measure' },
-  funnel: { minDim: 1, maxDim: 1, minMet: 1, msg: 'Funnel needs 1 dimension & 1 measure' },
-  gauge: { minDim: 0, maxDim: 0, minMet: 1, msg: 'Gauge needs 1 measure' },
-  boxplot: { minDim: 1, minMet: 1, msg: 'Boxplot needs 1 dimension & 1 measure' },
-  sankey: { minDim: 2, minMet: 1, msg: 'Sankey needs 2 dimensions & 1 measure' },
+// ── Enterprise Chart Specification Registry ──
+// Comprehensive validation rules per chart type (inspired by Superset/Tableau)
+interface ChartSpec {
+  minDim: number;
+  maxDim?: number;
+  minMet: number;
+  maxMet?: number;
+  minPivotCols?: number;
+  maxPivotCols?: number;
+  requiresPivotCols?: boolean;
+  msg: string;
+  dimLabel?: string;
+  metLabel?: string;
+}
+
+const CHART_SPEC: Record<string, ChartSpec> = {
+  kpi:        { minDim: 0, maxDim: 0, minMet: 1, maxMet: 1, msg: 'KPI needs exactly 1 measure, no dimensions' },
+  gauge:      { minDim: 0, maxDim: 0, minMet: 1, maxMet: 1, msg: 'Gauge needs exactly 1 measure, no dimensions' },
+  table:      { minDim: 0, minMet: 0, msg: 'Table needs at least 1 dimension or 1 measure' },
+  pivot:      { minDim: 1, minMet: 1, minPivotCols: 1, requiresPivotCols: true, msg: 'Pivot needs 1+ row dims, 1+ column dims, and 1 measure', dimLabel: 'Rows', metLabel: 'Measures' },
+  bar:        { minDim: 1, minMet: 1, msg: 'Bar needs 1+ dimensions and 1+ measures' },
+  line:       { minDim: 1, minMet: 1, msg: 'Line needs 1+ dimensions and 1+ measures' },
+  area:       { minDim: 1, minMet: 1, msg: 'Area needs 1+ dimensions and 1+ measures' },
+  pie:        { minDim: 1, maxDim: 1, minMet: 1, maxMet: 1, msg: 'Pie needs exactly 1 dimension and 1 measure' },
+  donut:      { minDim: 1, maxDim: 1, minMet: 1, maxMet: 1, msg: 'Donut needs exactly 1 dimension and 1 measure' },
+  scatter:    { minDim: 0, minMet: 2, msg: 'Scatter needs at least 2 measures (X and Y axis)' },
+  heatmap:    { minDim: 1, maxDim: 1, minMet: 1, maxMet: 1, minPivotCols: 1, maxPivotCols: 1, requiresPivotCols: true, msg: 'Heatmap needs 1 row dimension (Y-axis), 1 column dimension (X-axis), and 1 measure', dimLabel: 'Y-Axis', metLabel: 'Values' },
+  treemap:    { minDim: 1, minMet: 1, maxMet: 1, msg: 'Treemap needs 1+ dimensions and 1 measure' },
+  sunburst:   { minDim: 1, minMet: 1, maxMet: 1, msg: 'Sunburst needs 1+ dimensions and 1 measure' },
+  funnel:     { minDim: 1, maxDim: 1, minMet: 1, maxMet: 1, msg: 'Funnel needs exactly 1 dimension and 1 measure' },
+  boxplot:    { minDim: 1, minMet: 1, msg: 'Boxplot needs 1+ dimensions and 1+ measures' },
+  sankey:     { minDim: 2, maxDim: 2, minMet: 1, maxMet: 1, msg: 'Sankey needs exactly 2 dimensions (source & target) and 1 measure' },
+  calendar:   { minDim: 1, maxDim: 1, minMet: 1, maxMet: 1, msg: 'Calendar needs 1 date dimension and 1 measure' },
+  radar:      { minDim: 1, minMet: 1, msg: 'Radar needs 1+ dimensions and 1+ measures' },
+  parallel:   { minDim: 0, minMet: 2, msg: 'Parallel coordinates needs 2+ measures' },
+  themeRiver: { minDim: 1, maxDim: 1, minMet: 1, maxMet: 1, msg: 'Theme River needs 1 time dimension and 1 measure' },
+  graph:      { minDim: 1, minMet: 0, msg: 'Graph needs 1+ dimensions' },
+  chord:      { minDim: 2, maxDim: 2, minMet: 1, maxMet: 1, msg: 'Chord needs 2 dimensions and 1 measure' },
+  pictorialBar: { minDim: 1, minMet: 1, msg: 'Pictorial Bar needs 1+ dimensions and 1+ measures' },
 };
+
+// ── Validation Engine ──
+interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+function validateChartConfig(
+  chartType: string,
+  dims: any[],
+  mets: any[],
+  pivotCols: any[]
+): ValidationResult {
+  const spec = CHART_SPEC[chartType];
+  if (!spec) return { valid: true, errors: [], warnings: [] };
+
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const totalDims = dims.length;
+  const totalMets = mets.length;
+  const totalPivotCols = pivotCols.length;
+
+  // Table special case: needs at least 1 of either
+  if (chartType === 'table' && totalDims === 0 && totalMets === 0) {
+    errors.push('Table needs at least 1 dimension or 1 measure');
+    return { valid: false, errors, warnings };
+  }
+
+  // Skip further checks for table if it has anything
+  if (chartType === 'table') return { valid: true, errors: [], warnings: [] };
+
+  const dl = spec.dimLabel || 'dimension';
+  const ml = spec.metLabel || 'measure';
+
+  if (totalDims < spec.minDim)
+    errors.push(`Needs at least ${spec.minDim} ${dl}(s) — currently ${totalDims}`);
+  if (spec.maxDim !== undefined && totalDims > spec.maxDim)
+    warnings.push(`Max ${spec.maxDim} ${dl}(s) recommended — currently ${totalDims}`);
+
+  if (totalMets < spec.minMet)
+    errors.push(`Needs at least ${spec.minMet} ${ml}(s) — currently ${totalMets}`);
+  if (spec.maxMet !== undefined && totalMets > spec.maxMet)
+    warnings.push(`Max ${spec.maxMet} ${ml}(s) recommended — currently ${totalMets}`);
+
+  if (spec.requiresPivotCols && totalPivotCols < (spec.minPivotCols || 1))
+    errors.push(`Needs at least ${spec.minPivotCols || 1} column dimension(s) — currently ${totalPivotCols}`);
+  if (spec.maxPivotCols !== undefined && totalPivotCols > spec.maxPivotCols)
+    warnings.push(`Max ${spec.maxPivotCols} column dimension(s) recommended — currently ${totalPivotCols}`);
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+// ── Friendly Error Message Parser ──
+function parseFriendlyError(errorMsg: string): { friendly: string; raw: string } {
+  const raw = errorMsg;
+  const lower = errorMsg.toLowerCase();
+
+  if (lower.includes('column') && lower.includes('does not exist'))
+    return { friendly: 'A selected column was not found in your dataset. Try refreshing the schema metadata.', raw };
+  if (lower.includes('division by zero'))
+    return { friendly: 'A division by zero occurred. Check your metric expressions for zero denominators.', raw };
+  if (lower.includes('timeout') || lower.includes('timed out'))
+    return { friendly: 'Query took too long. Try adding filters to reduce data volume or increase the timeout.', raw };
+  if (lower.includes('permission denied'))
+    return { friendly: 'Database permission denied. Contact your admin to grant access to this table.', raw };
+  if (lower.includes('syntax error'))
+    return { friendly: 'SQL syntax error in the generated query. This may indicate a data configuration issue.', raw };
+  if (lower.includes('relation') && lower.includes('does not exist'))
+    return { friendly: 'The underlying table or view was not found. The dataset may have been renamed or deleted.', raw };
+
+  return { friendly: errorMsg, raw };
+}
+
+// ── Data Type Icon Helper ──
+function getDataTypeIcon(dataType: string) {
+  const dt = (dataType || '').toLowerCase();
+  if (dt.includes('int') || dt.includes('float') || dt.includes('decimal') || dt.includes('numeric') || dt.includes('number') || dt.includes('double') || dt.includes('real'))
+    return <Hash size={11} className="text-emerald-500" />;
+  if (dt.includes('date') || dt.includes('time') || dt.includes('timestamp'))
+    return <CalendarDays size={11} className="text-amber-500" />;
+  return <Type size={11} className="text-blue-500" />;
+}
 
 const LoadingAnimation = () => (
   <div className="flex flex-col items-center justify-center space-y-4">
@@ -108,6 +218,8 @@ const ChartBuilderPage: React.FC = () => {
   const [dimensions, setDimensions] = useState<{ name: string; alias: string }[]>([]);
   const [pivotColumns, setPivotColumns] = useState<{ name: string; alias: string }[]>([]);
   const [metrics, setMetrics] = useState<{ name: string; column?: string; agg?: string; alias: string }[]>([]);
+  const [sortBy, setSortBy] = useState<string>('');
+  const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('DESC');
   const [selectedPalette, setSelectedPalette] = useState<keyof typeof PALETTES>('modern');
   const [activeFilters, setActiveFilters] = useState<any[]>([]);
   const [visualConfig, setVisualConfig] = useState<Record<string, any>>({});
@@ -177,6 +289,15 @@ const ChartBuilderPage: React.FC = () => {
       const rawMets = chartToEdit.query_config?.metrics || [];
       setMetrics(rawMets.map((m: any) => typeof m === 'string' ? { name: m, alias: m } : m));
 
+      const rawOrderBy = chartToEdit.query_config?.orderBy || [];
+      if (rawOrderBy.length > 0) {
+        setSortBy(rawOrderBy[0].column || '');
+        setSortDirection(rawOrderBy[0].direction || 'DESC');
+      } else {
+        setSortBy('');
+        setSortDirection('DESC');
+      }
+
       setVisualConfig(chartToEdit.visual_config || {});
     }
   }, [chartToEdit]);
@@ -214,6 +335,7 @@ const ChartBuilderPage: React.FC = () => {
           dimensions,
           pivotColumns,
           metrics,
+          orderBy: sortBy ? [{ column: sortBy, direction: sortDirection }] : [],
           limit: 1000
         },
         filters: filterDict
@@ -222,12 +344,17 @@ const ChartBuilderPage: React.FC = () => {
     },
   });
 
-  // Transform preview data for ECharts
+  // Transform preview data for ECharts (with crash protection)
   const chartData = useMemo(() => {
-    const res = previewMutation.data;
-    if (!res || !res.data) return { series: [] };
-    return transformChartData(res.data, chartType, dimensions, metrics, pivotColumns);
-  }, [previewMutation.data, dimensions, metrics, chartType]);
+    try {
+      const res = previewMutation.data;
+      if (!res || !res.data) return { series: [] };
+      return transformChartData(res.data, chartType, dimensions, metrics, pivotColumns);
+    } catch (err) {
+      console.error('[ChartBuilder] transformChartData failed:', err);
+      return { series: [] };
+    }
+  }, [previewMutation.data, dimensions, metrics, chartType, pivotColumns]);
 
   const handleRunQuery = () => {
     if (selectedDatasetId && (dimensions.length > 0 || metrics.length > 0)) {
@@ -241,8 +368,11 @@ const ChartBuilderPage: React.FC = () => {
       if (exists) return prev.filter(d => d.name !== col);
       return [...prev, { name: col, alias: col }];
     });
-    // Remove from other shelf if exists
-    setPivotColumns(prev => prev.filter(d => d.name !== col));
+    // Remove from other shelf if exists (prevent duplicate)
+    if (pivotColumns.some(d => d.name === col)) {
+      setPivotColumns(prev => prev.filter(d => d.name !== col));
+      toast(`Moved "${col}" from Columns to Rows`, { icon: '⇄' });
+    }
   };
 
   const togglePivotColumn = (col: string) => {
@@ -251,8 +381,11 @@ const ChartBuilderPage: React.FC = () => {
       if (exists) return prev.filter(d => d.name !== col);
       return [...prev, { name: col, alias: col }];
     });
-    // Remove from other shelf if exists
-    setDimensions(prev => prev.filter(d => d.name !== col));
+    // Remove from other shelf if exists (prevent duplicate)
+    if (dimensions.some(d => d.name === col)) {
+      setDimensions(prev => prev.filter(d => d.name !== col));
+      toast(`Moved "${col}" from Rows to Columns`, { icon: '⇄' });
+    }
   };
 
   const toggleMetric = (met: any) => {
@@ -338,6 +471,7 @@ const ChartBuilderPage: React.FC = () => {
         dimensions, 
         pivotColumns, 
         metrics, 
+        orderBy: sortBy ? [{ column: sortBy, direction: sortDirection }] : [],
         limit: 100000,
         default_filters: Object.keys(defaultFilters).length > 0 ? defaultFilters : undefined
       },
@@ -349,19 +483,18 @@ const ChartBuilderPage: React.FC = () => {
     setIsSaveModalOpen(false);
   };
 
-  const checkRequirements = () => {
-    const req = CHART_REQUIREMENTS[chartType];
-    if (!req) return { met: true };
+  // ── Validation ──
+  const validation = useMemo(
+    () => validateChartConfig(chartType, dimensions, metrics, pivotColumns),
+    [chartType, dimensions, metrics, pivotColumns]
+  );
 
-    const dimCount = dimensions.length + pivotColumns.length;
-    const metCount = metrics.length;
-
-    if (dimCount < req.minDim) return { met: false, msg: req.msg };
-    if (req.maxDim !== undefined && dimCount > req.maxDim) return { met: false, msg: req.msg };
-    if (metCount < req.minMet) return { met: false, msg: req.msg };
-
-    return { met: true };
-  };
+  // ── Friendly API error ──
+  const apiError = useMemo(() => {
+    if (!previewMutation.error) return null;
+    const detail = (previewMutation.error as any)?.response?.data?.detail || (previewMutation.error as Error)?.message || 'Unknown error';
+    return parseFriendlyError(detail);
+  }, [previewMutation.error]);
 
   if (isChartLoading && id) {
     return (
@@ -370,8 +503,8 @@ const ChartBuilderPage: React.FC = () => {
       </div>
     );
   }
-
-  const reqStatus = checkRequirements();
+  const isPivotMode = chartType === 'pivot' || chartType === 'heatmap';
+  const spec = CHART_SPEC[chartType];
 
   return (
     <div className="flex flex-col h-full overflow-hidden animate-in fade-in duration-500" style={{ userSelect: dragging ? 'none' : 'auto' }}>
@@ -420,7 +553,8 @@ const ChartBuilderPage: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleRunQuery}
-            disabled={previewMutation.isPending || !selectedDatasetId || !reqStatus.met}
+            disabled={previewMutation.isPending || !selectedDatasetId || !validation.valid}
+            title={!validation.valid ? validation.errors[0] : undefined}
             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
           >
             {previewMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />} 
@@ -549,7 +683,10 @@ const ChartBuilderPage: React.FC = () => {
                   return (
                     <div key={col.id} className="flex flex-col gap-1 p-1 hover:bg-white dark:hover:bg-[#1e1e1e] rounded-lg transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 group">
                       <div className="flex items-center justify-between px-2 py-1">
-                        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">{col.friendly_name || col.column_name}</span>
+                        <div className="flex items-center gap-1.5">
+                          {getDataTypeIcon(col.data_type)}
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">{col.friendly_name || col.column_name}</span>
+                        </div>
                         {!isPivotMode && (
                           <button
                             onClick={() => toggleDimension(col.column_name)}
@@ -715,82 +852,109 @@ const ChartBuilderPage: React.FC = () => {
         {/* Center: Shelves & Canvas */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-slate-100/50 dark:bg-slate-900/50">
 
-          {/* Shelves (Tableau Style) */}
+          {/* Shelves (Tableau/Qlik Style with Drag-and-Drop Reordering) */}
           <div className="shrink-0 bg-white dark:bg-[#0f1115] border-b border-slate-200 dark:border-slate-800 p-3 flex flex-col gap-3">
             {/* Row Dimensions / Standard Dimensions */}
-            <div className="flex items-center gap-4">
-              <span className="w-16 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {chartType === 'pivot' || chartType === 'heatmap' ? 'Rows' : 'Columns'}
-              </span>
-              <div className="flex-1 min-h-[40px] bg-slate-50/80 dark:bg-[#1a1b1e] border border-slate-200 dark:border-slate-800 rounded-md flex flex-wrap items-center gap-2 p-1.5 shadow-inner">
-                {dimensions.map((dim, idx) => (
-                  <div key={dim.name} className="flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-[#2d2f34] border border-blue-500/30 text-blue-700 dark:text-blue-400 rounded text-[11px] font-semibold shadow-sm group">
-                    <Type size={12} className="opacity-70" />
-                    <input
-                      value={dim.alias}
-                      onChange={e => {
-                        const newDims = [...dimensions];
-                        newDims[idx].alias = e.target.value;
-                        setDimensions(newDims);
-                      }}
-                      className="bg-transparent border-none focus:ring-0 p-0 text-[11px] font-semibold w-fit min-w-[30px] outline-none text-slate-800 dark:text-slate-200"
-                    />
-                    <button onClick={() => toggleDimension(dim.name)} className="opacity-50 hover:opacity-100 hover:text-red-500 transition-colors ml-1"><X size={14} /></button>
-                  </div>
-                ))}
-                {dimensions.length === 0 && <span className="text-[11px] font-medium text-slate-400 italic px-2">Drop dimensions here</span>}
-              </div>
-            </div>
+            <SortableShelf
+              label={isPivotMode ? (spec?.dimLabel || 'Rows') : 'Columns'}
+              items={dimensions}
+              onReorder={setDimensions}
+              onAliasChange={(idx, val) => {
+                const newDims = [...dimensions];
+                newDims[idx].alias = val;
+                setDimensions(newDims);
+              }}
+              onRemove={(name) => toggleDimension(name)}
+              color="blue"
+              emptyText={isPivotMode ? 'Drop row dimensions here' : 'Drop dimensions here'}
+            />
 
-            {/* Column Dimensions (Pivot only) */}
-            {(chartType === 'pivot' || chartType === 'heatmap') && (
-              <div className="flex items-center gap-4">
-                <span className="w-16 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">Columns</span>
-                <div className="flex-1 min-h-[40px] bg-slate-50/80 dark:bg-[#1a1b1e] border border-slate-200 dark:border-slate-800 rounded-md flex flex-wrap items-center gap-2 p-1.5 shadow-inner">
-                  {pivotColumns.map((dim, idx) => (
-                    <div key={dim.name} className="flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-[#2d2f34] border border-brand/30 text-brand rounded text-[11px] font-semibold shadow-sm group">
-                      <Type size={12} className="opacity-70" />
-                      <input
-                        value={dim.alias}
-                        onChange={e => {
-                          const newCols = [...pivotColumns];
-                          newCols[idx].alias = e.target.value;
-                          setPivotColumns(newCols);
-                        }}
-                        className="bg-transparent border-none focus:ring-0 p-0 text-[11px] font-semibold w-fit min-w-[30px] outline-none text-slate-800 dark:text-slate-200"
-                      />
-                      <button onClick={() => togglePivotColumn(dim.name)} className="opacity-50 hover:opacity-100 hover:text-red-500 transition-colors ml-1"><X size={14} /></button>
-                    </div>
-                  ))}
-                  {pivotColumns.length === 0 && <span className="text-[11px] font-medium text-slate-400 italic px-2">Drop column dimensions here</span>}
-                </div>
-              </div>
+            {/* Column Dimensions (Pivot / Heatmap) */}
+            {isPivotMode && (
+              <SortableShelf
+                label="Columns"
+                items={pivotColumns}
+                onReorder={setPivotColumns}
+                onAliasChange={(idx, val) => {
+                  const newCols = [...pivotColumns];
+                  newCols[idx].alias = val;
+                  setPivotColumns(newCols);
+                }}
+                onRemove={(name) => togglePivotColumn(name)}
+                color="purple"
+                emptyText="Drop column dimensions here"
+              />
             )}
 
             {/* Measures / Values */}
+            <SortableShelf
+              label={isPivotMode ? (spec?.metLabel || 'Measures') : 'Values'}
+              items={metrics}
+              onReorder={setMetrics}
+              onAliasChange={(idx, val) => {
+                const newMets = [...metrics];
+                newMets[idx].alias = val;
+                setMetrics(newMets);
+              }}
+              onRemove={(name) => toggleMetric(name)}
+              color="green"
+              emptyText="Drop measures here"
+            />
+
+            {/* Sort Order Control */}
             <div className="flex items-center gap-4">
-              <span className="w-16 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {chartType === 'pivot' || chartType === 'heatmap' ? 'Measures' : 'Rows'}
-              </span>
-              <div className="flex-1 min-h-[40px] bg-slate-50/80 dark:bg-[#1a1b1e] border border-slate-200 dark:border-slate-800 rounded-md flex flex-wrap items-center gap-2 p-1.5 shadow-inner">
-                {metrics.map((met, idx) => (
-                  <div key={met.name} className="flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-[#2d2f34] border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded text-[11px] font-semibold shadow-sm group">
-                    <Hash size={12} className="opacity-70" />
-                    <input
-                      value={met.alias}
-                      onChange={e => {
-                        const newMets = [...metrics];
-                        newMets[idx].alias = e.target.value;
-                        setMetrics(newMets);
-                      }}
-                      className="bg-transparent border-none focus:ring-0 p-0 text-[11px] font-semibold w-fit min-w-[30px] outline-none text-slate-800 dark:text-slate-200"
-                    />
-                    <button onClick={() => toggleMetric(met)} className="opacity-50 hover:opacity-100 hover:text-red-500 transition-colors ml-1"><X size={14} /></button>
-                  </div>
-                ))}
-                {metrics.length === 0 && <span className="text-[11px] font-medium text-slate-400 italic px-2">Drop measures here</span>}
+              <span className="w-16 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">Sort By</span>
+              <div className="flex-1 flex items-center gap-3 bg-slate-50/80 dark:bg-[#1a1b1e] border border-slate-200 dark:border-slate-800 rounded-md p-1.5 shadow-inner">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-white dark:bg-[#2d2f34] border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded text-[11px] font-semibold p-1 outline-none"
+                >
+                  <option value="">Default (Auto-sort)</option>
+                  {dimensions.map((d) => (
+                    <option key={d.name} value={d.alias || d.name}>{d.alias || d.name} (Dimension)</option>
+                  ))}
+                  {pivotColumns.map((d) => (
+                    <option key={d.name} value={d.alias || d.name}>{d.alias || d.name} (Column)</option>
+                  ))}
+                  {metrics.map((m) => (
+                    <option key={m.name} value={m.alias || m.name}>{m.alias || m.name} (Measure)</option>
+                  ))}
+                </select>
+
+                {sortBy && (
+                  <button
+                    onClick={() => setSortDirection(prev => prev === 'ASC' ? 'DESC' : 'ASC')}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-[#2d2f34] border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded text-[11px] font-semibold shadow-sm hover:bg-slate-50 transition-all"
+                  >
+                    <ArrowUpDown size={12} className="text-slate-500" />
+                    <span className="text-[10px] font-bold">{sortDirection}</span>
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Validation Banners */}
+            {selectedDatasetId && validation.errors.length > 0 && (
+              <div className="flex items-start gap-2 p-2.5 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-lg animate-in fade-in duration-200">
+                <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  {validation.errors.map((e, i) => (
+                    <span key={i} className="text-[11px] font-semibold text-red-600 dark:text-red-400">{e}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {selectedDatasetId && validation.warnings.length > 0 && (
+              <div className="flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-lg animate-in fade-in duration-200">
+                <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  {validation.warnings.map((w, i) => (
+                    <span key={i} className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">{w}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Canvas Area */}
@@ -801,32 +965,52 @@ const ChartBuilderPage: React.FC = () => {
               </div>
             )}
 
-            {!reqStatus.met && selectedDatasetId ? (
+            {/* API Error Banner */}
+            {apiError && !previewMutation.isPending && (
+              <div className="shrink-0 m-4 mb-0 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-700 dark:text-red-400">{apiError.friendly}</p>
+                    {apiError.raw !== apiError.friendly && (
+                      <details className="mt-1">
+                        <summary className="text-[10px] font-bold text-red-500/70 cursor-pointer hover:text-red-500">Show raw error</summary>
+                        <pre className="mt-1 text-[10px] font-mono text-red-600/80 dark:text-red-400/70 whitespace-pre-wrap break-all">{apiError.raw}</pre>
+                      </details>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!validation.valid && selectedDatasetId ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400 animate-in zoom-in duration-300">
                 <div className="w-16 h-16 bg-amber-50 dark:bg-amber-900/20 rounded-full flex items-center justify-center mb-4">
                   <Filter size={32} className="text-amber-500" />
                 </div>
                 <p className="font-bold text-slate-900 dark:text-white text-lg">Configuration Required</p>
-                <p className="text-sm text-slate-500 mt-1 max-w-xs text-center">{reqStatus.msg}</p>
+                <p className="text-sm text-slate-500 mt-1 max-w-md text-center">{CHART_SPEC[chartType]?.msg || 'Add dimensions and measures to build this chart'}</p>
               </div>
             ) : selectedDatasetId && (dimensions.length > 0 || metrics.length > 0) ? (
               <div className="flex-1 flex flex-col p-6">
-                <EChartWrapper
-                  chartType={chartType}
-                  data={chartData}
-                  title={chartTitle}
-                  height="100%"
-                  visualConfig={{ ...visualConfig, colorPalette: PALETTES[selectedPalette] }}
-                  drillStack={builderDrill.drillStack}
-                  availableColumns={dataset?.columns?.map((c: any) => c.column_name) || []}
-                  currentDimensionName={dimensions[0]?.alias || dimensions[0]?.name || ''}
-                  onDrillDown={builderDrill.drillDown}
-                  onDrillUp={builderDrill.drillUp}
-                  onDrillToLevel={builderDrill.drillToLevel}
-                  onResetDrill={builderDrill.resetDrill}
-                  onFilterByValue={builderDrill.filterByValue}
-                  onExcludeValue={builderDrill.excludeValue}
-                />
+                <ChartErrorBoundary chartType={chartType} onReset={() => { setDimensions([]); setMetrics([]); setPivotColumns([]); }}>
+                  <EChartWrapper
+                    chartType={chartType}
+                    data={chartData}
+                    title={chartTitle}
+                    height="100%"
+                    visualConfig={{ ...visualConfig, colorPalette: PALETTES[selectedPalette] }}
+                    drillStack={builderDrill.drillStack}
+                    availableColumns={dataset?.columns?.map((c: any) => c.column_name) || []}
+                    currentDimensionName={dimensions[0]?.alias || dimensions[0]?.name || ''}
+                    onDrillDown={builderDrill.drillDown}
+                    onDrillUp={builderDrill.drillUp}
+                    onDrillToLevel={builderDrill.drillToLevel}
+                    onResetDrill={builderDrill.resetDrill}
+                    onFilterByValue={builderDrill.filterByValue}
+                    onExcludeValue={builderDrill.excludeValue}
+                  />
+                </ChartErrorBoundary>
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
