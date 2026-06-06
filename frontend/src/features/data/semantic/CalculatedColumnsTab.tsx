@@ -1,39 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../api';
-import { Calculator, Plus, Trash2, Edit3, Code, X, Check } from 'lucide-react';
+import { Calculator, Plus, Trash2, Edit3, Code, X, Check, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CalculatedColumnFormModal from './CalculatedColumnFormModal';
 
 interface CalculatedColumn { 
-  id: number; 
-  name: string; 
-  expression: string; 
-  friendly_name: string | null; 
-  description: string | null;
-  data_type: string | null;
+  id: number; name: string; expression: string; 
+  friendly_name: string | null; description: string | null; data_type: string | null;
 }
 
-interface Props { 
-  datasetId: number; 
-  columns: CalculatedColumn[]; 
-}
+interface Props { datasetId: number; columns: CalculatedColumn[]; }
 
 const CalculatedColumnsTab: React.FC<Props> = ({ datasetId, columns }) => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [editExpr, setEditExpr] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const safeColumns = Array.isArray(columns) ? columns : [];
+
+  const filtered = useMemo(() => {
+    if (!searchTerm.trim()) return safeColumns;
+    const term = searchTerm.toLowerCase();
+    return safeColumns.filter(c =>
+      (c.name?.toLowerCase() ?? '').includes(term) ||
+      (c.friendly_name?.toLowerCase() ?? '').includes(term) ||
+      (c.expression?.toLowerCase() ?? '').includes(term)
+    );
+  }, [safeColumns, searchTerm]);
 
   const deleteMut = useMutation({
     mutationFn: (colId: number) => api.delete(`/api/datasets/${datasetId}/columns/${colId}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); toast.success('Calculated column deleted'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); toast.success('Deleted'); },
     onError: () => toast.error('Failed to delete')
   });
 
   const updateMut = useMutation({
     mutationFn: ({ colId, data }: { colId: number; data: any }) => api.patch(`/api/datasets/${datasetId}/columns/${colId}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); setEditId(null); toast.success('Calculated column updated'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); setEditId(null); toast.success('Updated'); },
     onError: () => toast.error('Failed to update')
   });
 
@@ -41,45 +46,64 @@ const CalculatedColumnsTab: React.FC<Props> = ({ datasetId, columns }) => {
     <div className="h-full flex flex-col p-6 space-y-4 overflow-auto custom-scrollbar">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Calculator size={18} className="text-blue-500 dark:text-blue-400" />
+          <Calculator size={18} className="text-violet-500 dark:text-violet-400" />
           <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Calculated Columns</span>
-          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{columns.length}</span>
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{safeColumns.length}</span>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/10">
-          <Plus size={14} /> Add Calculated Column
-        </button>
+        <div className="flex items-center gap-2">
+          {safeColumns.length > 0 && (
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-2 text-slate-400 dark:text-slate-500" />
+              <input type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                className="pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors placeholder:text-slate-400 dark:placeholder:text-slate-600 w-44" />
+            </div>
+          )}
+          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/10">
+            <Plus size={14} /> Add Column
+          </button>
+        </div>
       </div>
 
-      {columns.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-slate-600 py-16">
-          <Calculator size={48} className="mb-4 opacity-20" />
-          <p className="font-medium mb-1">No Calculated Columns Defined</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">Create custom calculated columns using SQL expressions</p>
+      {safeColumns.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center py-16">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+            <Calculator size={28} className="text-slate-300 dark:text-slate-600" />
+          </div>
+          <p className="font-semibold text-sm text-slate-500 dark:text-slate-400 mb-1">No Calculated Columns</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 max-w-xs text-center">Create custom columns using SQL expressions</p>
           <button onClick={() => setIsModalOpen(true)} className="text-brand dark:text-brand-light text-xs font-bold hover:underline">+ Add your first calculated column</button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center py-12">
+          <p className="text-xs text-slate-400 dark:text-slate-500">No results for "{searchTerm}"</p>
+          <button onClick={() => setSearchTerm('')} className="text-[10px] text-brand font-bold mt-2 hover:underline">Clear</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {columns.map(col => (
+          {filtered.map(col => (
             <div key={col.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 hover:shadow-md dark:hover:shadow-black/20 hover:border-brand/20 dark:hover:border-brand/40 transition-all group">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg"><Calculator size={16} /></div>
+                  <div className="p-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg"><Calculator size={16} /></div>
                   <div>
                     <div className="text-sm font-bold text-slate-800 dark:text-slate-100">{col.friendly_name || col.name}</div>
-                    <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{col.name}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{col.name}</span>
+                      {col.data_type && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 uppercase">{col.data_type}</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => { setEditId(col.id); setEditExpr(col.expression); }} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400 dark:text-slate-500 hover:text-brand transition"><Edit3 size={14} /></button>
-                  <button onClick={() => { if (confirm('Delete this calculated column?')) deleteMut.mutate(col.id); }} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-slate-400 dark:text-slate-500 hover:text-red-500 transition"><Trash2 size={14} /></button>
+                  <button onClick={() => { setEditId(col.id); setEditExpr(col.expression); }} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-brand transition"><Edit3 size={14} /></button>
+                  <button onClick={() => { if (confirm('Delete?')) deleteMut.mutate(col.id); }} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-slate-400 hover:text-red-500 transition"><Trash2 size={14} /></button>
                 </div>
               </div>
               {editId === col.id ? (
                 <div className="space-y-2">
-                  <textarea value={editExpr} onChange={e => setEditExpr(e.target.value)} rows={2} className="w-full text-xs font-mono px-3 py-2 bg-slate-900 text-blue-400 rounded-lg border-none outline-none focus:ring-2 focus:ring-brand dark:bg-black" />
+                  <textarea value={editExpr} onChange={e => setEditExpr(e.target.value)} rows={2} className="w-full text-xs font-mono px-3 py-2 bg-slate-900 dark:bg-black text-violet-400 rounded-lg border-none outline-none focus:ring-2 focus:ring-brand" />
                   <div className="flex gap-2">
-                    <button onClick={() => updateMut.mutate({ colId: col.id, data: { expression: editExpr } })} className="flex items-center gap-1 px-2 py-1 bg-blue-500 text-white rounded text-[10px] font-bold hover:bg-blue-600 transition"><Check size={12} />Save</button>
-                    <button onClick={() => setEditId(null)} className="flex items-center gap-1 px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-[10px] font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition"><X size={12} />Cancel</button>
+                    <button onClick={() => updateMut.mutate({ colId: col.id, data: { expression: editExpr } })} className="flex items-center gap-1 px-2 py-1 bg-violet-500 text-white rounded text-[10px] font-bold hover:bg-violet-600 transition"><Check size={12} />Save</button>
+                    <button onClick={() => setEditId(null)} className="flex items-center gap-1 px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-[10px] font-bold transition"><X size={12} />Cancel</button>
                   </div>
                 </div>
               ) : (
@@ -88,7 +112,7 @@ const CalculatedColumnsTab: React.FC<Props> = ({ datasetId, columns }) => {
                   <code className="text-[11px] font-mono text-slate-600 dark:text-slate-300 truncate">{col.expression}</code>
                 </div>
               )}
-              {col.description && <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">{col.description}</p>}
+              {col.description && <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2">{col.description}</p>}
             </div>
           ))}
         </div>
