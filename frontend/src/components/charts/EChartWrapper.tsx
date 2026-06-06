@@ -72,6 +72,7 @@ interface ChartData {
     data?: any[];
     value?: number;
   }>;
+  pivotData?: any;
 }
 
 interface EChartWrapperProps {
@@ -1101,6 +1102,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
               categories={data.categories}
               dimensions={data.dimensions}
               series={data.series}
+              pivotData={data.pivotData}
               visualConfig={visualConfig}
               themeMeta={themeMeta}
               onDrillContextMenu={handleReactChartContextMenu}

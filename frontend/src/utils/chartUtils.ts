@@ -8,7 +8,9 @@ export interface ChartData {
     data?: any[];
     value?: number;
   }>;
+  pivotData?: any; // Rich structured data for pivot table
 }
+
 
 export const transformChartData = (
   resData: any[],
@@ -115,10 +117,9 @@ export const transformChartData = (
   if (chartType === 'pivot') {
     const rowDimNames = dimensions.map(getDisplayName);
     const colDimNames = (pivotColumns || []).map(getDisplayName);
+    const metricNames = metrics.map(getDisplayName);
 
-    if (rowDimNames.length > 0 && metrics.length > 0) {
-      const mDisplay = getDisplayName(metrics[0]);
-
+    if (rowDimNames.length > 0 && metricNames.length > 0) {
       // 1. Identify unique rows
       const rowMap = new Map<string, any[]>();
       resData.forEach(row => {
@@ -129,28 +130,64 @@ export const transformChartData = (
       });
       const uniqueRowKeys = Array.from(rowMap.keys());
 
-      // 2. Identify unique column combinations
-      const uniqueCols = Array.from(new Set(resData.map(row => 
-          colDimNames.map(d => String(row[d] ?? '')).join(' - ')
-      ))).filter(c => c !== "");
-      
-      if (uniqueCols.length === 0) uniqueCols.push("Total");
+      // 2. Identify unique column combinations of colDimNames
+      let uniqueColCombs: string[][] = [];
+      if (colDimNames.length > 0) {
+        const colCombsSet = new Set<string>();
+        resData.forEach(row => {
+          const path = colDimNames.map(d => String(row[d] ?? ''));
+          colCombsSet.add(JSON.stringify(path));
+        });
+        uniqueColCombs = Array.from(colCombsSet).map(s => JSON.parse(s));
+        // Sort column combinations for clean display
+        uniqueColCombs.sort((a, b) => {
+          for (let i = 0; i < a.length; i++) {
+            const cmp = a[i].localeCompare(b[i], undefined, { numeric: true, sensitivity: 'base' });
+            if (cmp !== 0) return cmp;
+          }
+          return 0;
+        });
+      } else {
+        uniqueColCombs = [[]]; // fallback when no column dimensions are selected
+      }
 
-      // 3. Build lookup table
-      const lookup: Record<string, Record<string, any>> = {};
-      uniqueCols.forEach(c => lookup[c] = {});
+      // 3. Build a robust cell lookup map: (rowKey, colCombKey, metricName) -> value
+      const lookup: Record<string, Record<string, Record<string, any>>> = {};
       
       resData.forEach(row => {
           const rKey = rowDimNames.map(d => String(row[d] ?? '')).join('|||');
-          const cKey = colDimNames.map(d => String(row[d] ?? '')).join(' - ') || "Total";
-          lookup[cKey][rKey] = row[mDisplay];
+          const colCombPath = colDimNames.map(d => String(row[d] ?? ''));
+          const cKey = colCombPath.join('|||');
+          
+          if (!lookup[rKey]) lookup[rKey] = {};
+          if (!lookup[rKey][cKey]) lookup[rKey][cKey] = {};
+          
+          metricNames.forEach(m => {
+            lookup[rKey][cKey][m] = row[m];
+          });
       });
 
-      // 4. Build Result
-      const pivotSeries = uniqueCols.map(c => ({
-        name: c,
-        data: uniqueRowKeys.map(r => lookup[c][r] ?? null)
-      }));
+      // 4. Build leafColumns for the table
+      const leafColumns: Array<{ key: string; colValues: string[]; metricName: string }> = [];
+      uniqueColCombs.forEach(colVals => {
+        metricNames.forEach(m => {
+          const key = [...colVals, m].join('|||');
+          leafColumns.push({
+            key,
+            colValues: colVals,
+            metricName: m
+          });
+        });
+      });
+
+      // 5. Build series in the legacy format for compatibility, but also embed the rich pivotData
+      const pivotSeries = leafColumns.map(lc => {
+        const cKey = lc.colValues.join('|||');
+        return {
+          name: lc.colValues.length > 0 ? `${lc.colValues.join(' - ')} - ${lc.metricName}` : lc.metricName,
+          data: uniqueRowKeys.map(rKey => lookup[rKey]?.[cKey]?.[lc.metricName] ?? null)
+        };
+      });
 
       const dimensionData = rowDimNames.map((name, i) => ({
           name,
@@ -160,10 +197,21 @@ export const transformChartData = (
       return {
         categories: uniqueRowKeys,
         series: pivotSeries,
-        dimensions: dimensionData
+        dimensions: dimensionData,
+        pivotData: {
+          rowDimensionNames: rowDimNames,
+          colDimensionNames: colDimNames,
+          measureNames: metricNames,
+          leafColumns,
+          uniqueRowKeys,
+          uniqueColCombs,
+          lookup,
+          rawMetrics: metrics
+        }
       };
     }
   }
+
 
   // ── Calendar ──
   if (chartType === 'calendar') {
