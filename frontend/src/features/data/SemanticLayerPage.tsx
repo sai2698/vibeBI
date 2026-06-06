@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api';
-import { Layers, Columns, Hash, Eye, GitMerge, Database, AlertCircle, Calculator, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Layers, Columns, Hash, Eye, GitMerge, Database, AlertCircle, Calculator, Loader2, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DatasetExplorer from './semantic/DatasetExplorer';
 import ColumnsTab from './semantic/ColumnsTab';
@@ -19,7 +19,6 @@ interface Dataset {
   columns?: any[]; metrics?: any[]; calculated_columns?: any[];
 }
 
-/** Guarantees all array fields exist, preventing null-access crashes downstream */
 const safeDataset = (ds: Dataset | undefined | null): Dataset | null => {
   if (!ds) return null;
   return {
@@ -30,9 +29,10 @@ const safeDataset = (ds: Dataset | undefined | null): Dataset | null => {
   };
 };
 
-type TabKey = 'columns' | 'metrics' | 'calculated_columns' | 'relationships' | 'preview';
+type TabKey = 'description' | 'columns' | 'metrics' | 'calculated_columns' | 'relationships' | 'preview';
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'description', label: 'Description', icon: <FileText size={14} /> },
   { key: 'columns', label: 'Columns', icon: <Columns size={14} /> },
   { key: 'metrics', label: 'Metrics', icon: <Hash size={14} /> },
   { key: 'calculated_columns', label: 'Calculated Columns', icon: <Calculator size={14} /> },
@@ -43,11 +43,11 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 const SemanticLayerPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('columns');
+  const [activeTab, setActiveTab] = useState<TabKey>('description');
   const [selectedColumn, setSelectedColumn] = useState<any | null>(null);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'datasets'|'datamarts'>('datasets');
-  const [descExpanded, setDescExpanded] = useState(false);
+  const [descValue, setDescValue] = useState('');
 
   const activeLOB = useLOBStore((state: any) => state.activeLOB);
 
@@ -56,28 +56,46 @@ const SemanticLayerPage: React.FC = () => {
     queryFn: async () => { const r = await api.get('/api/datasets/', { params: { lob_id: activeLOB?.id } }); return r.data; },
   });
 
+  const { data: datasources = [] } = useQuery<any[]>({
+    queryKey: ['datasources'],
+    queryFn: async () => (await api.get('/api/datasources/')).data,
+  });
+
   const { data: rawDataset, isLoading: isDatasetLoading, isError: isDatasetError, error: datasetError } = useQuery<Dataset>({
     queryKey: ['datasets', selectedDatasetId],
     queryFn: async () => { const r = await api.get(`/api/datasets/${selectedDatasetId}`); return r.data; },
     enabled: !!selectedDatasetId,
   });
 
-  // Normalize dataset to guarantee arrays exist
   const dataset = safeDataset(rawDataset);
 
   useEffect(() => {
     if (!selectedDatasetId && datasets.length > 0) setSelectedDatasetId(datasets[0].id);
   }, [datasets, selectedDatasetId]);
 
+  useEffect(() => {
+    if (dataset) {
+      setDescValue(dataset.description || '');
+    }
+  }, [dataset?.id, dataset?.description]);
+
   const refreshMut = useMutation({
     mutationFn: (id: number) => api.post(`/api/datasets/${id}/refresh`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets'] }); toast.success('Schema refreshed'); },
+    onSuccess: (_, id) => { 
+      queryClient.invalidateQueries({ queryKey: ['datasets'] }); 
+      queryClient.invalidateQueries({ queryKey: ['datasets', id] });
+      toast.success('Schema refreshed'); 
+    },
     onError: () => toast.error('Refresh failed')
   });
 
   const updateDatasetMut = useMutation({
     mutationFn: (data: { id: number, description: string }) => api.patch(`/api/datasets/${data.id}`, { description: data.description }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets'] }); toast.success('Dataset saved'); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['datasets'] }); 
+      queryClient.invalidateQueries({ queryKey: ['datasets', selectedDatasetId] });
+      toast.success('Dataset saved'); 
+    },
     onError: () => toast.error('Failed to save dataset')
   });
 
@@ -88,6 +106,12 @@ const SemanticLayerPage: React.FC = () => {
       case 'metrics': return (dataset.metrics ?? []).length;
       case 'calculated_columns': return (dataset.calculated_columns ?? []).length;
       default: return null;
+    }
+  };
+
+  const handleSaveDescription = () => {
+    if (dataset && descValue !== (dataset.description || '')) {
+      updateDatasetMut.mutate({ id: dataset.id, description: descValue });
     }
   };
 
@@ -132,6 +156,73 @@ const SemanticLayerPage: React.FC = () => {
     if (!dataset) return null;
 
     switch (activeTab) {
+      case 'description':
+        return (
+          <SemanticErrorBoundary fallbackTitle="Description tab crashed">
+            <div className="p-6 max-w-2xl space-y-6">
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider">Description</h3>
+                <textarea 
+                  value={descValue}
+                  onChange={(e) => setDescValue(e.target.value)}
+                  placeholder="Enter dataset business description..."
+                  className="w-full text-xs text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none transition-colors" 
+                  rows={5}
+                  onBlur={handleSaveDescription}
+                />
+                {descValue !== (dataset.description || '') && (
+                  <div className="flex items-center gap-2 justify-end pt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                    {updateDatasetMut.isPending && (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mr-1">
+                        <Loader2 size={11} className="animate-spin" /> Saving...
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onMouseDown={() => setDescValue(dataset.description || '')}
+                      className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveDescription}
+                      disabled={updateDatasetMut.isPending}
+                      className="px-4 py-1.5 bg-brand text-white text-xs font-bold rounded-lg hover:bg-brand-dark transition shadow shadow-brand/10 disabled:opacity-50"
+                    >
+                      Save Description
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Technical Details Grid */}
+              <div className="border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-850/25">
+                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-150 dark:border-slate-850">
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500">Technical Details</h4>
+                </div>
+                <div className="p-4 grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <span className="text-slate-450 dark:text-slate-500 block mb-0.5">Dataset ID</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{dataset.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-450 dark:text-slate-500 block mb-0.5">Physical Table / View</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{dataset.table_name || 'Custom SQL Query'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-450 dark:text-slate-500 block mb-0.5">Dataset Type</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 capitalize">{dataset.table_name ? 'Table' : 'Custom SQL'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-450 dark:text-slate-500 block mb-0.5">Columns Count</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{dataset.columns?.length ?? 0}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </SemanticErrorBoundary>
+        );
       case 'columns':
         return (
           <SemanticErrorBoundary fallbackTitle="Columns tab crashed">
@@ -172,6 +263,9 @@ const SemanticLayerPage: React.FC = () => {
     }
   };
 
+  const isRefreshing = refreshMut.isPending;
+  const refreshingId = isRefreshing ? (refreshMut.variables as number) : null;
+
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden transition-colors">
       {/* Header */}
@@ -187,25 +281,26 @@ const SemanticLayerPage: React.FC = () => {
             <button onClick={() => setViewMode('datamarts')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'datamarts' ? 'bg-white dark:bg-slate-700 text-brand shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Data Marts</button>
           </div>
         </div>
-        {/* Dataset summary stats — only show when dataset is loaded */}
+        
+        {/* Dataset summary stats */}
         {dataset && !isDatasetLoading && (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 animate-in fade-in duration-200">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-              <Database size={14} className="text-slate-400 dark:text-slate-500" />
+              <Database size={14} className="text-slate-400 dark:text-slate-505" />
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{dataset.name}</span>
-              <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500">({dataset.table_name || 'SQL'})</span>
+              <span className="text-[9px] font-mono text-slate-450 dark:text-slate-500">({dataset.table_name || 'SQL'})</span>
             </div>
             <div className="flex gap-3 text-[10px] font-bold text-slate-400 dark:text-slate-500">
               <span className="flex items-center gap-1">
-                <Columns size={12} className="text-blue-500 dark:text-blue-400" />
+                <Columns size={12} className="text-blue-500 dark:text-blue-455" />
                 {(dataset.columns ?? []).length} cols
               </span>
               <span className="flex items-center gap-1">
-                <Hash size={12} className="text-emerald-500 dark:text-emerald-400" />
+                <Hash size={12} className="text-emerald-500 dark:text-emerald-455" />
                 {(dataset.metrics ?? []).length} metrics
               </span>
               <span className="flex items-center gap-1">
-                <Calculator size={12} className="text-violet-500 dark:text-violet-400" />
+                <Calculator size={12} className="text-violet-500 dark:text-violet-455" />
                 {(dataset.calculated_columns ?? []).length} calc
               </span>
             </div>
@@ -218,52 +313,17 @@ const SemanticLayerPage: React.FC = () => {
         {/* Left: Dataset Explorer */}
         <DatasetExplorer
           datasets={datasets}
+          datasources={datasources}
           selectedId={selectedDatasetId}
-          onSelect={id => { setSelectedDatasetId(id); setSelectedColumn(null); setActiveTab('columns'); setDescExpanded(false); }}
+          onSelect={id => { setSelectedDatasetId(id); setSelectedColumn(null); setActiveTab('description'); }}
           onRefresh={id => refreshMut.mutate(id)}
-          isRefreshing={refreshMut.isPending}
+          refreshingId={refreshingId}
           search={search}
           onSearchChange={setSearch}
         />
 
         {/* Center: Tabbed Editor */}
         <div className="flex-1 flex flex-col min-w-0 bg-slate-50/30 dark:bg-slate-900/30">
-          {/* Collapsible description section */}
-          {dataset && (
-            <div className="shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-              <button
-                onClick={() => setDescExpanded(!descExpanded)}
-                className="w-full px-6 py-2.5 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-              >
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                  Description
-                  {dataset.description && !descExpanded && (
-                    <span className="ml-2 font-normal normal-case tracking-normal text-slate-400 dark:text-slate-500">
-                      — {dataset.description.slice(0, 80)}{(dataset.description?.length ?? 0) > 80 ? '...' : ''}
-                    </span>
-                  )}
-                </span>
-                {descExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-              </button>
-              {descExpanded && (
-                <div className="px-6 pb-4">
-                  <textarea 
-                    key={dataset.id}
-                    defaultValue={dataset.description || ''} 
-                    placeholder="Add a description for this dataset..."
-                    className="w-full text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 outline-none focus:border-brand focus:ring-1 focus:ring-brand resize-none transition-colors" 
-                    rows={2}
-                    onBlur={(e) => {
-                      if (e.target.value !== (dataset.description || '')) {
-                        updateDatasetMut.mutate({ id: dataset.id, description: e.target.value });
-                      }
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Tabs */}
           <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex gap-1">
             {TABS.map(t => {
@@ -275,7 +335,7 @@ const SemanticLayerPage: React.FC = () => {
                   className={`flex items-center gap-2 px-4 py-3 text-xs font-bold transition-all border-b-2 ${
                     activeTab === t.key
                       ? 'text-brand border-brand dark:text-brand-light dark:border-brand-light'
-                      : 'text-slate-400 dark:text-slate-500 border-transparent hover:text-slate-600 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+                      : 'text-slate-400 dark:text-slate-505 border-transparent hover:text-slate-650 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
                 >
                   {t.icon} {t.label}
