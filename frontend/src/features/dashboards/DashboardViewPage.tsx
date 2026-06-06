@@ -331,13 +331,13 @@ const DashboardViewPage: React.FC = () => {
   const [stagedFilters, setStagedFilters] = useState<Record<string, any>>({});
   
   // Track drill filters applied by each chart widget (key: chartId)
-  const [chartsDrillFilters, setChartsDrillFilters] = useState<Record<number, Record<string, string>>>({});
+  const [chartsDrillFilters, setChartsDrillFilters] = useState<Record<number, Record<string, string | string[]>>>({});
   // Track drill stacks for saving views
   const [chartsDrillStacks, setChartsDrillStacks] = useState<Record<number, any[]>>({});
   // Signal to widgets to restore drill stacks
   const [restoreDrillAction, setRestoreDrillAction] = useState<{ stacks: Record<number, any[]>; timestamp: number } | null>(null);
 
-  const handleWidgetDrillFiltersChange = useCallback((chartId: number, drillFilters: Record<string, string>, drillStack?: any[]) => {
+  const handleWidgetDrillFiltersChange = useCallback((chartId: number, drillFilters: Record<string, string | string[]>, drillStack?: any[]) => {
     setChartsDrillFilters(prev => {
       // If drillFilters is empty, remove the entry
       if (!drillFilters || Object.keys(drillFilters).length === 0) {
@@ -381,15 +381,20 @@ const DashboardViewPage: React.FC = () => {
       Object.entries(widgetDrillFilters).forEach(([col, val]) => {
         if (val !== undefined && val !== null && val !== '') {
           let isExclude = false;
-          let actualValue = val;
+          let actualValue: any = val;
           if (typeof val === 'string' && val.startsWith('__EXCLUDE__')) {
             isExclude = true;
             actualValue = val.substring(11);
+          } else if (Array.isArray(val)) {
+            if (val.length > 0 && typeof val[0] === 'string' && val[0].startsWith('__EXCLUDE__')) {
+               isExclude = true;
+               actualValue = val.map(v => typeof v === 'string' ? v.replace(/^__EXCLUDE__/, '') : v);
+            }
           }
           children.push({
             type: 'rule',
             column_name: col,
-            operator: isExclude ? 'NOT_EQUALS' : 'EQUALS',
+            operator: isExclude ? (Array.isArray(actualValue) ? 'NOT_IN' : 'NOT_EQUALS') : (Array.isArray(actualValue) ? 'IN' : 'EQUALS'),
             value: actualValue
           });
         }

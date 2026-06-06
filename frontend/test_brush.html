@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div id="main" style="width: 600px;height:400px;"></div>
+    <div id="output" style="font-family: monospace;"></div>
+    <script type="text/javascript">
+        var myChart = echarts.init(document.getElementById('main'));
+        var option = {
+            xAxis: {
+                type: 'category',
+                data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            },
+            yAxis: {
+                type: 'value'
+            },
+            brush: {
+                xAxisIndex: 'all',
+                yAxisIndex: 'all'
+            },
+            series: [
+                {
+                    data: [150, 230, 224, 218, 135, 147, 260],
+                    type: 'line'
+                }
+            ]
+        };
+        myChart.setOption(option);
+        
+        myChart.on('brushSelected', function (params) {
+            var selected = params.batch[0].selected;
+            var out = [];
+            for (var i = 0; i < selected.length; i++) {
+                out.push(selected[i].dataIndex.length);
+            }
+            document.getElementById('output').innerHTML = "Selected points count: " + out.join(',');
+        });
+
+        // Trigger a rect brush programmatically
+        myChart.dispatchAction({
+            type: 'brush',
+            areas: [
+                {
+                    brushType: 'rect',
+                    coordRange: [[1, 3], [100, 300]]
+                }
+            ]
+        });
+    </script>
+</body>
+</html>

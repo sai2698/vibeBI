@@ -157,15 +157,22 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
     // 3. Add drill-down filters
     Object.entries(drill.drillFilters).forEach(([key, value]) => {
       let isExclude = false;
-      let actualValue = value;
+      let actualValue: any = value;
+      
       if (typeof value === 'string' && value.startsWith('__EXCLUDE__')) {
         isExclude = true;
         actualValue = value.substring(11);
+      } else if (Array.isArray(value)) {
+        if (value.length > 0 && typeof value[0] === 'string' && value[0].startsWith('__EXCLUDE__')) {
+           isExclude = true;
+           actualValue = value.map(v => typeof v === 'string' ? v.replace(/^__EXCLUDE__/, '') : v);
+        }
       }
+
       children.push({
         type: 'rule',
         column_name: key,
-        operator: isExclude ? 'NOT_EQUALS' : 'EQUALS',
+        operator: isExclude ? (Array.isArray(actualValue) ? 'NOT_IN' : 'NOT_EQUALS') : (Array.isArray(actualValue) ? 'IN' : 'EQUALS'),
         value: actualValue
       });
     });

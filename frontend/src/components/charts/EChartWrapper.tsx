@@ -5,6 +5,7 @@ import { registerAllThemes, getThemeMeta } from './themes';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api';
 import DrillContextMenu from './DrillContextMenu';
+import toast from 'react-hot-toast';
 import type { DrillMenuClickInfo } from './DrillContextMenu';
 import type { DrillLevel } from './useDrillDown';
 
@@ -88,8 +89,8 @@ interface EChartWrapperProps {
   onDrillUp?: () => void;
   onDrillToLevel?: (level: number) => void;
   onResetDrill?: () => void;
-  onFilterByValue?: (column: string, value: string) => void;
-  onExcludeValue?: (column: string, value: string) => void;
+  onFilterByValue?: (column: string, value: string | string[]) => void;
+  onExcludeValue?: (column: string, value: string | string[]) => void;
 }
 
 const brandColors = [
@@ -529,12 +530,19 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
   const lastMouseCoords = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   // Tracks the last element the pointer hovered over — used by non-Cartesian contextmenu
   const lastHoveredItem = useRef<{ categoryValue: string; dataValue: number | string; seriesName: string } | null>(null);
+  // Tracks active brush selection so right-clicks inside the brush don't revert to single selection
+  const activeBrushSelectionRef = useRef<Set<string>>(new Set());
+  const isPieMultiSelectModeRef = useRef<boolean>(false);
 
   const handleChartContextMenu = useCallback((e: React.MouseEvent) => {
     lastMouseCoords.current = { x: e.clientX, y: e.clientY };
     // Always suppress the native browser context menu on the chart container.
     // Our custom DrillContextMenu is shown via ECharts events instead.
     e.preventDefault();
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    lastMouseCoords.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   // Callback for React-based chart components (DataTable, Pivot, KPI)
@@ -563,6 +571,21 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
       instance.getZr().on('contextmenu', (zrEvent: any) => {
         if (!onDrillDownRef.current && !onFilterByValueRef.current) return;
         zrEvent.event?.preventDefault?.();
+
+        if (activeBrushSelectionRef.current.size > 0) {
+          setDrillMenu({
+            x: zrEvent.event?.clientX ?? lastMouseCoords.current.x,
+            y: zrEvent.event?.clientY ?? lastMouseCoords.current.y,
+            info: {
+              categoryValue: Array.from(activeBrushSelectionRef.current),
+              seriesName: 'Multiple series',
+              dataValue: `${activeBrushSelectionRef.current.size} items`,
+              dimensionName: currentDimensionNameRef.current,
+            },
+          });
+          return;
+        }
+
         const pointInPixel = [zrEvent.offsetX, zrEvent.offsetY];
 
         if (instance.containPixel && instance.containPixel('grid', pointInPixel)) {
@@ -596,6 +619,20 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
                   const seriesData = opt?.series?.[0]?.data || [];
                   dataValue = seriesData[xIndex] ?? 0;
                 }
+              }
+
+              if (activeBrushSelectionRef.current.size > 0) {
+                setDrillMenu({
+                  x: zrEvent.event?.clientX ?? lastMouseCoords.current.x,
+                  y: zrEvent.event?.clientY ?? lastMouseCoords.current.y,
+                  info: {
+                    categoryValue: Array.from(activeBrushSelectionRef.current),
+                    seriesName: 'Multiple series',
+                    dataValue: `${activeBrushSelectionRef.current.size} items`,
+                    dimensionName: currentDimensionNameRef.current,
+                  },
+                });
+                return;
               }
 
               if (categoryValue) {
@@ -638,6 +675,20 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
         zrEvent.event?.preventDefault?.();
         if (!onDrillDownRef.current && !onFilterByValueRef.current) return;
 
+        if (activeBrushSelectionRef.current.size > 0) {
+          setDrillMenu({
+            x: zrEvent.event?.clientX ?? lastMouseCoords.current.x,
+            y: zrEvent.event?.clientY ?? lastMouseCoords.current.y,
+            info: {
+              categoryValue: Array.from(activeBrushSelectionRef.current),
+              seriesName: 'Multiple series',
+              dataValue: `${activeBrushSelectionRef.current.size} items`,
+              dimensionName: currentDimensionNameRef.current,
+            },
+          });
+          return;
+        }
+
         const item = lastHoveredItem.current;
         if (item && item.categoryValue) {
           setDrillMenu({
@@ -661,6 +712,20 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
       if (!onDrillDownRef.current && !onFilterByValueRef.current) return;
       params.event?.event?.preventDefault?.();
 
+      if (activeBrushSelectionRef.current.size > 0) {
+        setDrillMenu({
+          x: params.event?.event?.clientX ?? lastMouseCoords.current.x,
+          y: params.event?.event?.clientY ?? lastMouseCoords.current.y,
+          info: {
+            categoryValue: Array.from(activeBrushSelectionRef.current),
+            seriesName: 'Multiple series',
+            dataValue: `${activeBrushSelectionRef.current.size} items`,
+            dimensionName: currentDimensionNameRef.current,
+          },
+        });
+        return;
+      }
+
       let categoryValue = '';
       let seriesName = String(params.seriesName || '');
       let dataValue = params.value ?? params.data?.value ?? 0;
@@ -679,6 +744,113 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             categoryValue,
             seriesName,
             dataValue: typeof dataValue === 'object' ? JSON.stringify(dataValue) : dataValue,
+            dimensionName: currentDimensionNameRef.current,
+          },
+        });
+      }
+    });
+
+    // Update active selection during brushing
+    instance.off('brushSelected');
+    instance.on('brushSelected', (params: any) => {
+      const selected = params.batch?.[0]?.selected || [];
+      const areas = params.batch?.[0]?.areas || [];
+      const categoriesToSelect = new Set<string>();
+
+      // Check if areas gives us a lineX or rect selection (provides exact X-axis coordRanges)
+      let usedAreas = false;
+      areas.forEach((area: any) => {
+        let xMin, xMax;
+        if (area.brushType === 'lineX' && area.coordRange && area.coordRange.length === 2) {
+          xMin = area.coordRange[0];
+          xMax = area.coordRange[1];
+        } else if (area.brushType === 'rect' && area.coordRange && area.coordRange.length === 2 && Array.isArray(area.coordRange[0])) {
+          xMin = area.coordRange[0][0];
+          xMax = area.coordRange[0][1];
+        }
+
+        if (xMin !== undefined && xMax !== undefined) {
+          usedAreas = true;
+          const opt = instance.getOption();
+          const axisData = opt?.xAxis?.[0]?.data || dataRef.current.categories || [];
+          
+          const min = Math.max(0, Math.ceil(Math.min(xMin, xMax)));
+          const max = Math.min(axisData.length - 1, Math.floor(Math.max(xMin, xMax)));
+          
+          for (let i = min; i <= max; i++) {
+             if (axisData[i] !== undefined && axisData[i] !== null) {
+               categoriesToSelect.add(String(axisData[i]));
+             }
+          }
+        }
+      });
+
+      // Fallback to dataIndex for rect brushes (e.g. bar charts, scatter)
+      if (!usedAreas) {
+        selected.forEach((sel: any) => {
+          if (sel.dataIndex && sel.dataIndex.length > 0) {
+            const opt = instance.getOption();
+            let axisData = opt?.xAxis?.[0]?.data || dataRef.current.categories || [];
+            
+            const yAxis = opt?.yAxis?.[0];
+            const isHorizontal = yAxis && (yAxis.type === 'category' || (yAxis.data && yAxis.data.length > 0));
+            if (isHorizontal) {
+              axisData = yAxis.data || dataRef.current.categories || [];
+            }
+
+            sel.dataIndex.forEach((idx: number) => {
+              if (axisData[idx] !== undefined && axisData[idx] !== null) {
+                categoriesToSelect.add(String(axisData[idx]));
+              }
+            });
+          }
+        });
+      }
+      
+      activeBrushSelectionRef.current = categoriesToSelect;
+    });
+
+    // Handle pie chart selection events (ECharts 5+)
+    instance.off('selectchanged');
+    instance.on('selectchanged', (params: any) => {
+      // Don't interfere if it's a cartesian chart using brush
+      if (CARTESIAN_CHART_TYPES.has(chartTypeRef.current)) return;
+
+      const selected = params.selected || [];
+      const categoriesToSelect = new Set<string>();
+      const opt = instance.getOption();
+      
+      selected.forEach((sel: any) => {
+        if (sel.dataIndex && sel.dataIndex.length > 0) {
+           const seriesData = opt?.series?.[sel.seriesIndex || 0]?.data || [];
+           sel.dataIndex.forEach((idx: number) => {
+             const dataItem = seriesData[idx];
+             if (dataItem && dataItem.name) {
+               categoriesToSelect.add(String(dataItem.name));
+             } else if (dataRef.current.categories && dataRef.current.categories[idx]) {
+               categoriesToSelect.add(String(dataRef.current.categories[idx]));
+             }
+           });
+        }
+      });
+
+      activeBrushSelectionRef.current = categoriesToSelect;
+    });
+
+    // Removed automatic click popup so pie chart multi-selection isn't interrupted.
+
+    // Brush end event for menu popup
+    instance.off('brushEnd');
+    instance.on('brushEnd', (params: any) => {
+      if (!onFilterByValueRef.current) return;
+      if (activeBrushSelectionRef.current.size > 0) {
+        setDrillMenu({
+          x: lastMouseCoords.current.x,
+          y: lastMouseCoords.current.y,
+          info: {
+            categoryValue: Array.from(activeBrushSelectionRef.current),
+            seriesName: 'Multiple series',
+            dataValue: `${activeBrushSelectionRef.current.size} items`,
             dimensionName: currentDimensionNameRef.current,
           },
         });
@@ -757,13 +929,28 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
     }
   }, [chartType, data, visualConfig]);
 
+  const dataString = JSON.stringify(data);
+  const visualConfigString = JSON.stringify(visualConfig);
+
   const mergedOption = useMemo(() => {
     const baseOpt = buildOption(chartType, data, title, visualConfig, theme, themeMeta);
+    
+    // Add brush to baseOpt if it's a Cartesian chart
+    if (CARTESIAN_CHART_TYPES.has(chartType)) {
+      baseOpt.brush = {
+        toolbox: [],
+        xAxisIndex: 'all',
+        yAxisIndex: 'all',
+      };
+      // Note: we intentionally do NOT force toolbox.show = true here.
+      // We trigger the brush programmatically from the DrillContextMenu.
+    }
+
     return {
       ...baseOpt,
       backgroundColor: visualConfig?.backgroundColor || themeMeta?.background || '#fff',
     };
-  }, [chartType, data, title, visualConfig, theme, themeMeta]);
+  }, [chartType, dataString, title, visualConfigString, theme, themeMeta]);
 
   // Render React-based chart components (not ECharts)
   if (chartType === 'table') {
@@ -821,13 +1008,35 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             currentDimension={currentDimensionName}
             canDrillUp={(drillStack?.length ?? 0) > 0}
             onDrillDown={(targetCol) => {
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
+              const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, catVal);
             }}
             onDrillUp={() => onDrillUp?.()}
-            onFilterByValue={() => onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
-            onExcludeValue={() => onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
+            onFilterByValue={() => {
+              onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
+            onExcludeValue={() => {
+              onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
+            onSelectMultipleValues={() => {
+              if (echartsRef.current) {
+                echartsRef.current.dispatchAction({
+                  type: 'takeGlobalCursor',
+                  key: 'brush',
+                  brushOption: {
+                    brushType: 'rect',
+                    brushMode: 'single'
+                  }
+                });
+              }
+            }}
             onResetDrill={(drillStack?.length ?? 0) > 0 ? onResetDrill : undefined}
-            onClose={() => setDrillMenu(null)}
+            onClose={() => {
+              setDrillMenu(null);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
           />
         )}
       </>
@@ -889,13 +1098,35 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             currentDimension={currentDimensionName}
             canDrillUp={(drillStack?.length ?? 0) > 0}
             onDrillDown={(targetCol) => {
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
+              const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, catVal);
             }}
             onDrillUp={() => onDrillUp?.()}
-            onFilterByValue={() => onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
-            onExcludeValue={() => onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
+            onFilterByValue={() => {
+              onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
+            onExcludeValue={() => {
+              onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
+            onSelectMultipleValues={() => {
+              if (echartsRef.current) {
+                echartsRef.current.dispatchAction({
+                  type: 'takeGlobalCursor',
+                  key: 'brush',
+                  brushOption: {
+                    brushType: 'rect',
+                    brushMode: 'single'
+                  }
+                });
+              }
+            }}
             onResetDrill={(drillStack?.length ?? 0) > 0 ? onResetDrill : undefined}
-            onClose={() => setDrillMenu(null)}
+            onClose={() => {
+              setDrillMenu(null);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
           />
         )}
       </>
@@ -957,13 +1188,35 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             currentDimension={currentDimensionName}
             canDrillUp={(drillStack?.length ?? 0) > 0}
             onDrillDown={(targetCol) => {
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
+              const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, catVal);
             }}
             onDrillUp={() => onDrillUp?.()}
-            onFilterByValue={() => onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
-            onExcludeValue={() => onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
+            onFilterByValue={() => {
+              onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
+            onExcludeValue={() => {
+              onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
+            onSelectMultipleValues={() => {
+              if (echartsRef.current) {
+                echartsRef.current.dispatchAction({
+                  type: 'takeGlobalCursor',
+                  key: 'brush',
+                  brushOption: {
+                    brushType: 'rect',
+                    brushMode: 'single'
+                  }
+                });
+              }
+            }}
             onResetDrill={(drillStack?.length ?? 0) > 0 ? onResetDrill : undefined}
-            onClose={() => setDrillMenu(null)}
+            onClose={() => {
+              setDrillMenu(null);
+              if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+            }}
           />
         )}
       </>
@@ -1042,6 +1295,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
     <div
       ref={containerRef}
       onContextMenu={handleChartContextMenu}
+      onMouseMove={handleMouseMove}
       style={{
         height,
         width: '100%',
@@ -1097,13 +1351,63 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
           currentDimension={currentDimensionName}
           canDrillUp={drillStack.length > 0}
           onDrillDown={(targetCol) => {
-            onDrillDown(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
+            const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
+            onDrillDown(drillMenu.info.dimensionName, targetCol, catVal);
           }}
           onDrillUp={() => onDrillUp?.()}
-          onFilterByValue={() => onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
-          onExcludeValue={() => onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue)}
+          onFilterByValue={() => {
+            onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+            isPieMultiSelectModeRef.current = false;
+            activeBrushSelectionRef.current.clear();
+            if (echartsRef.current) {
+              echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+              if (!CARTESIAN_CHART_TYPES.has(chartTypeRef.current)) {
+                echartsRef.current.dispatchAction({ type: 'unselect', seriesIndex: 0 });
+              }
+            }
+          }}
+          onExcludeValue={() => {
+            onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+            isPieMultiSelectModeRef.current = false;
+            activeBrushSelectionRef.current.clear();
+            if (echartsRef.current) {
+              echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+              if (!CARTESIAN_CHART_TYPES.has(chartTypeRef.current)) {
+                echartsRef.current.dispatchAction({ type: 'unselect', seriesIndex: 0 });
+              }
+            }
+          }}
+          onSelectMultipleValues={() => {
+            if (echartsRef.current) {
+              if (!CARTESIAN_CHART_TYPES.has(chartTypeRef.current)) {
+                 isPieMultiSelectModeRef.current = true;
+                 toast.success("Multi-Select Mode ON: Click multiple pie slices to select them, then right-click your selection to filter!");
+                 setDrillMenu(null);
+                 return;
+              }
+              
+              echartsRef.current.dispatchAction({
+                type: 'takeGlobalCursor',
+                key: 'brush',
+                brushOption: {
+                  brushType: chartTypeRef.current === 'line' || chartTypeRef.current === 'area' ? 'lineX' : 'rect',
+                  brushMode: 'single'
+                }
+              });
+            }
+          }}
           onResetDrill={drillStack.length > 0 ? onResetDrill : undefined}
-          onClose={() => setDrillMenu(null)}
+          onClose={() => {
+            setDrillMenu(null);
+            isPieMultiSelectModeRef.current = false;
+            activeBrushSelectionRef.current.clear();
+            if (echartsRef.current) {
+               echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+               if (!CARTESIAN_CHART_TYPES.has(chartTypeRef.current)) {
+                 echartsRef.current.dispatchAction({ type: 'unselect', seriesIndex: 0 });
+               }
+            }
+          }}
         />
       )}
     </div>

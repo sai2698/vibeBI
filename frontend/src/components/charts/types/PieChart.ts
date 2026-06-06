@@ -289,6 +289,7 @@ export function buildPieChartOptions(options: PieChartOptions): EChartsOption {
       {
         name: series[0]?.name ?? 'Data',
         type: 'pie',
+        selectedMode: 'multiple',
         radius: isDonut 
           ? [`${innerRadius}%`, `${outerRadius}%`] 
           : `${outerRadius}%`,

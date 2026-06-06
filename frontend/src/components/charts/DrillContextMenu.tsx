@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 
 export interface DrillMenuClickInfo {
-  /** The category value that was clicked (e.g. "North") */
-  categoryValue: string;
+  /** The category value that was clicked (e.g. "North") or array of values */
+  categoryValue: string | string[];
   /** The series name (e.g. "Sales") */
   seriesName: string;
   /** The data value */
@@ -39,6 +39,7 @@ interface DrillContextMenuProps {
   onDrillUp: () => void;
   onFilterByValue: () => void;
   onExcludeValue: () => void;
+  onSelectMultipleValues?: () => void;
   onViewAsTable?: () => void;
   onResetDrill?: () => void;
   onClose: () => void;
@@ -55,6 +56,7 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
   onDrillUp,
   onFilterByValue,
   onExcludeValue,
+  onSelectMultipleValues,
   onViewAsTable,
   onResetDrill,
   onClose,
@@ -63,6 +65,19 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
   const [showDrillSub, setShowDrillSub] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [isSubmenuLeft, setIsSubmenuLeft] = useState(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnterSub = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    setShowDrillSub(true);
+  };
+
+  const handleMouseLeaveSub = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setShowDrillSub(false);
+    }, 300); // 300ms forgiving delay to cross the gap
+  };
 
   // Adjust position to stay within viewport
   useEffect(() => {
@@ -80,6 +95,14 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
       if (ay < 12) ay = 12;
 
       setAdjustedPos({ x: ax, y: ay });
+      
+      // Determine if submenu should open to the left (if not enough space on right)
+      // Main menu ~220px + Submenu ~180px = ~400px
+      if (ax + 420 > vw) {
+        setIsSubmenuLeft(true);
+      } else {
+        setIsSubmenuLeft(false);
+      }
     }
 
     // Trigger entrance animation
@@ -125,7 +148,9 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
       {/* Header */}
       <div className="drill-menu-header">
         <span className="drill-menu-header-label">
-          {clickInfo.categoryValue}
+          {Array.isArray(clickInfo.categoryValue) 
+            ? `${clickInfo.categoryValue.length} items selected` 
+            : clickInfo.categoryValue}
         </span>
         <span className="drill-menu-header-sub">
           {clickInfo.seriesName}: {typeof clickInfo.dataValue === 'number' ? clickInfo.dataValue.toLocaleString() : clickInfo.dataValue}
@@ -138,8 +163,8 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
       {drillTargets.length > 0 && (
         <div
           className="drill-menu-item drill-menu-item--has-sub"
-          onMouseEnter={() => setShowDrillSub(true)}
-          onMouseLeave={() => setShowDrillSub(false)}
+          onMouseEnter={handleMouseEnterSub}
+          onMouseLeave={handleMouseLeaveSub}
         >
           <div className="drill-menu-item-icon drill-menu-item-icon--brand">
             <ArrowDownRight size={14} />
@@ -149,7 +174,7 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
 
           {/* Sub-menu */}
           {showDrillSub && (
-            <div className="drill-submenu">
+            <div className={`drill-submenu ${isSubmenuLeft ? 'drill-submenu--left' : ''}`}>
               <div className="drill-submenu-label">
                 <Layers size={10} />
                 Select dimension to drill into
@@ -163,6 +188,7 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
                     onClose();
                   }}
                 >
+                  <span className="drill-submenu-item-dot" />
                   {col}
                 </button>
               ))}
@@ -210,7 +236,11 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
           <Filter size={14} />
         </div>
         <span>
-          Filter by <strong>{clickInfo.categoryValue}</strong>
+          Filter by <strong>
+            {Array.isArray(clickInfo.categoryValue) 
+              ? `${clickInfo.categoryValue.length} items` 
+              : clickInfo.categoryValue}
+          </strong>
         </span>
       </button>
 
@@ -226,7 +256,11 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
           <FilterX size={14} />
         </div>
         <span>
-          Exclude <strong>{clickInfo.categoryValue}</strong>
+          Exclude <strong>
+            {Array.isArray(clickInfo.categoryValue) 
+              ? `${clickInfo.categoryValue.length} items` 
+              : clickInfo.categoryValue}
+          </strong>
         </span>
       </button>
 
@@ -245,6 +279,24 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
               <Table size={14} />
             </div>
             <span>View as Table</span>
+          </button>
+        </>
+      )}
+
+      {/* Select Multiple Values */}
+      {!Array.isArray(clickInfo.categoryValue) && onSelectMultipleValues && (
+        <>
+          <button
+            className="drill-menu-item"
+            onClick={() => {
+              onSelectMultipleValues();
+              onClose();
+            }}
+          >
+            <div className="drill-menu-item-icon drill-menu-item-icon--brand">
+              <Layers size={14} />
+            </div>
+            <span>Select Multiple Values (Lasso)</span>
           </button>
         </>
       )}

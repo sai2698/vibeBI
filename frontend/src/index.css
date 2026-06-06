@@ -253,18 +253,36 @@
 /* Sub-menu (drill targets) */
 .drill-submenu {
   position: absolute;
-  left: 100%;
+  left: calc(100% + 4px);
   top: -4px;
   min-width: 180px;
-  background: rgba(255, 255, 255, 0.95);
+  max-height: 260px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.15), 
+    0 2px 10px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
   padding: 6px;
-  animation: drillSubIn 0.15s ease forwards;
+  animation: drillSubIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   z-index: 10;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.drill-submenu::-webkit-scrollbar {
+  width: 4px;
+}
+.drill-submenu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.drill-submenu::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .drill-submenu::before {
@@ -272,19 +290,41 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -12px;
-  width: 12px;
+  left: -16px;
+  width: 16px;
   background: transparent;
+}
+
+.drill-submenu--left {
+  left: auto;
+  right: calc(100% + 4px);
+  animation: drillSubInLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.drill-submenu--left::before {
+  left: auto;
+  right: -16px;
 }
 
 @keyframes drillSubIn {
   from {
     opacity: 0;
-    transform: translateX(-4px);
+    transform: translateX(-8px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes drillSubInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
   }
 }
 
@@ -301,7 +341,9 @@
 }
 
 .drill-submenu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 6px 10px;
   border-radius: 6px;
@@ -316,9 +358,23 @@
   font-family: inherit;
 }
 
+.drill-submenu-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
+}
+
 .drill-submenu-item:hover {
   background: #eef2ff;
   color: #4f46e5;
+}
+
+.drill-submenu-item:hover .drill-submenu-item-dot {
+  background: #6366f1;
+  transform: scale(1.5);
 }
 
 /* ── Drill Breadcrumbs ── */

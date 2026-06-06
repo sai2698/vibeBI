@@ -42,7 +42,13 @@ const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
               title={level.label}
             >
               <span className="text-[10px] font-semibold text-brand/60 uppercase tracking-wide">{level.filterColumn}:</span>
-              <span>{level.filterValue.replace('__EXCLUDE__', '≠ ')}</span>
+              <span>
+                {Array.isArray(level.filterValue) 
+                  ? (level.filterValue.length > 0 && String(level.filterValue[0]).startsWith('__EXCLUDE__') 
+                      ? `≠ ${level.filterValue.length} items` 
+                      : `${level.filterValue.length} items`)
+                  : String(level.filterValue).replace('__EXCLUDE__', '≠ ')}
+              </span>
             </button>
           </React.Fragment>
         ))}
