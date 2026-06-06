@@ -965,22 +965,23 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             flexDirection: 'column',
             overflow: 'hidden',
             containerType: 'size',
+            backgroundColor: themeMeta?.background || 'transparent',
           }}
         >
           {!hideHeader && title && (
             <div
               style={{
                 padding: '8px 16px',
-                backgroundColor: (visualConfig?.headerBackgroundColor as any) || 'transparent',
-                borderBottom: (visualConfig?.headerBorderBottom as any) || '1px solid #e2e8f0',
+                backgroundColor: 'transparent',
+                borderBottom: (visualConfig?.headerBorderBottom as any) || `1px solid ${themeMeta?.border || '#e2e8f0'}`,
               }}
             >
               <h3 style={{
                 margin: 0,
-                fontSize: `${visualConfig?.headerFontSize || 14}px`,
+                fontSize: `${(visualConfig?.general as any)?.titleFontSize || visualConfig?.headerFontSize || 14}px`,
                 fontWeight: (visualConfig?.headerFontWeight as any) || 600,
                 fontFamily: (visualConfig?.headerFontFamily as any) || 'inherit',
-                color: themeMeta?.heading || '#1e293b',
+                color: themeMeta?.heading || themeMeta?.text || '#1e293b',
               }}>
                 {title}
               </h3>
@@ -1055,22 +1056,23 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             flexDirection: 'column',
             overflow: 'hidden',
             containerType: 'size',
+            backgroundColor: themeMeta?.background || 'transparent',
           }}
         >
           {!hideHeader && title && (
             <div
               style={{
                 padding: '8px 16px',
-                backgroundColor: (visualConfig?.headerBackgroundColor as any) || 'transparent',
-                borderBottom: (visualConfig?.headerBorderBottom as any) || '1px solid #e2e8f0',
+                backgroundColor: 'transparent',
+                borderBottom: (visualConfig?.headerBorderBottom as any) || `1px solid ${themeMeta?.border || '#e2e8f0'}`,
               }}
             >
               <h3 style={{
                 margin: 0,
-                fontSize: `${visualConfig?.headerFontSize || 14}px`,
+                fontSize: `${(visualConfig?.general as any)?.titleFontSize || visualConfig?.headerFontSize || 14}px`,
                 fontWeight: (visualConfig?.headerFontWeight as any) || 600,
                 fontFamily: (visualConfig?.headerFontFamily as any) || 'inherit',
-                color: themeMeta?.heading || '#1e293b',
+                color: themeMeta?.heading || themeMeta?.text || '#1e293b',
               }}>
                 {title}
               </h3>
@@ -1145,22 +1147,23 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             flexDirection: 'column',
             overflow: 'hidden',
             containerType: 'size',
+            backgroundColor: themeMeta?.background || 'transparent',
           }}
         >
           {!hideHeader && title && (
             <div
               style={{
                 padding: '8px 16px',
-                backgroundColor: (visualConfig?.headerBackgroundColor as any) || 'transparent',
-                borderBottom: (visualConfig?.headerBorderBottom as any) || '1px solid #e2e8f0',
+                backgroundColor: 'transparent',
+                borderBottom: (visualConfig?.headerBorderBottom as any) || `1px solid ${themeMeta?.border || '#e2e8f0'}`,
               }}
             >
               <h3 style={{
                 margin: 0,
-                fontSize: `${visualConfig?.headerFontSize || 14}px`,
+                fontSize: `${(visualConfig?.general as any)?.titleFontSize || visualConfig?.headerFontSize || 14}px`,
                 fontWeight: (visualConfig?.headerFontWeight as any) || 600,
                 fontFamily: (visualConfig?.headerFontFamily as any) || 'inherit',
-                color: themeMeta?.heading || '#1e293b',
+                color: themeMeta?.heading || themeMeta?.text || '#1e293b',
               }}>
                 {title}
               </h3>
@@ -1197,13 +1200,13 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
           <div
             style={{
               padding: '8px 16px',
-              backgroundColor: (visualConfig?.headerBackgroundColor as any) || 'transparent',
+              backgroundColor: 'transparent',
               borderBottom: (visualConfig?.headerBorderBottom as any) || '1px solid #e2e8f0',
             }}
           >
             <h3 style={{
               margin: 0,
-              fontSize: `${visualConfig?.headerFontSize || 14}px`,
+              fontSize: `${(visualConfig?.general as any)?.titleFontSize || visualConfig?.headerFontSize || 14}px`,
               fontWeight: (visualConfig?.headerFontWeight as any) || 600,
               fontFamily: (visualConfig?.headerFontFamily as any) || 'inherit',
               color: themeMeta?.heading || '#1e293b',
@@ -1268,16 +1271,16 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
         <div
           style={{
             padding: '8px 16px',
-            backgroundColor: (visualConfig?.headerBackgroundColor as any) || 'transparent',
-            borderBottom: (visualConfig?.headerBorderBottom as any) || '1px solid #e2e8f0',
+            backgroundColor: 'transparent',
+            borderBottom: (visualConfig?.headerBorderBottom as any) || `1px solid ${themeMeta?.border || '#e2e8f0'}`,
           }}
         >
           <h3 style={{
             margin: 0,
-            fontSize: `${visualConfig?.headerFontSize || 14}px`,
+            fontSize: `${(visualConfig?.general as any)?.titleFontSize || visualConfig?.headerFontSize || 14}px`,
             fontWeight: (visualConfig?.headerFontWeight as any) || 600,
             fontFamily: (visualConfig?.headerFontFamily as any) || 'inherit',
-            color: themeMeta?.heading || '#1e293b',
+            color: themeMeta?.heading || themeMeta?.text || '#1e293b',
           }}>
             {title}
           </h3>

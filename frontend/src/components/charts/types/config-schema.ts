@@ -50,7 +50,40 @@ export type ConfigRenderer = FC<{
 
 // Helper to create config schema
 export function createChartConfigSchema(config: ChartConfigSchema): ChartConfigSchema {
-  return config;
+  const generalSection: ConfigSection = {
+    id: 'general',
+    title: 'General Settings',
+    icon: 'LayoutList',
+    defaultExpanded: true,
+    fields: [
+      {
+        key: 'general.showTitle',
+        label: 'Show Title on Dashboard',
+        type: 'boolean',
+        defaultValue: false,
+        description: 'Display the chart title directly above the chart when viewed on a dashboard',
+      },
+      {
+        key: 'general.titleFontSize',
+        label: 'Title Font Size',
+        type: 'range',
+        min: 10,
+        max: 36,
+        step: 1,
+        defaultValue: 14,
+        description: 'Adjust the size of the chart title text',
+      }
+    ]
+  };
+
+  return {
+    ...config,
+    sections: [generalSection, ...config.sections],
+    defaultConfig: {
+      general: { showTitle: false, titleFontSize: 14 },
+      ...config.defaultConfig,
+    }
+  };
 }
 
 const keyMap: Record<string, string> = {

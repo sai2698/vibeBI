@@ -68,7 +68,9 @@ export function getChartConfigSchema(chartType: string): ChartConfigSchema | und
     calendar: calendarChartConfigSchema,
     chord: chordChartConfigSchema,
     dataTable: dataTableChartConfigSchema,
+    table: dataTableChartConfigSchema,
     pivotTable: pivotTableChartConfigSchema,
+    pivot: pivotTableChartConfigSchema,
   };
   return schemas[chartType];
 }

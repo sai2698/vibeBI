@@ -6,7 +6,7 @@ import EChartWrapper from '../../components/charts/EChartWrapper';
 import DrillBreadcrumbs from '../../components/charts/DrillBreadcrumbs';
 import { transformChartData } from '../../utils/chartUtils';
 import { useDrillDown } from '../../components/charts/useDrillDown';
-import { AlertCircle, MoreHorizontal, FileSpreadsheet, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, MoreHorizontal, FileSpreadsheet, Image as ImageIcon, Type } from 'lucide-react';
 import * as echarts from 'echarts';
 import toast from 'react-hot-toast';
 
@@ -57,6 +57,7 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [userToggledTitleHidden, setUserToggledTitleHidden] = useState<boolean | null>(null);
 
   useEffect(() => {
     setPortalTarget(document.getElementById('drill-bar-portal'));
@@ -282,6 +283,10 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
   const isMetadataLoading = !chart;
   const isDataError = error || (!isLoading && !chartResponse && chart);
 
+  // Calculate actual title visibility based on DB config + local overrides
+  const isTitleHiddenByDefault = !(chartResponse?.visual_config?.general?.showTitle === true);
+  const isTitleHidden = userToggledTitleHidden !== null ? userToggledTitleHidden : isTitleHiddenByDefault;
+
   if (isDataError && !isMetadataLoading) {
     return (
       <div className="flex items-center justify-center h-full text-red-400 p-6 text-center bg-red-50/30 dark:bg-red-950/10 rounded-xl m-2">
@@ -335,6 +340,17 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
                 <ImageIcon size={12} />
                 Download PNG
               </button>
+              <div className="h-px bg-slate-100 my-1 mx-2" />
+              <button
+                onClick={() => {
+                  setUserToggledTitleHidden(!isTitleHidden);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-brand flex items-center gap-2 font-medium transition-colors"
+              >
+                <Type size={12} />
+                {isTitleHidden ? 'Show Title' : 'Hide Title'}
+              </button>
             </div>
           )}
         </div>
@@ -349,7 +365,7 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
             height={height}
             title={chartResponse.title}
             visualConfig={chartResponse.visual_config}
-            hideHeader={true}
+            hideHeader={isTitleHidden}
             theme={theme}
             drillStack={drill.drillStack}
             availableColumns={availableColumns}
