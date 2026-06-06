@@ -1,0 +1,991 @@
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
+import type { EChartsOption } from 'echarts';
+import { ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { registerAllThemes, getThemeMeta } from './themes';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../api';
+
+// Run custom themes registration on startup
+registerAllThemes();
+
+export type ChartType =
+  | 'bar'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'donut'
+  | 'scatter'
+  | 'heatmap'
+  | 'radar'
+  | 'funnel'
+  | 'gauge'
+  | 'treemap'
+  | 'sunburst'
+  | 'sankey'
+  | 'boxplot'
+  | 'waterfall'
+  | 'graph'
+  | 'tree'
+  | 'treemap'
+  | 'sunburst'
+  | 'parallel'
+  | 'sankey'
+  | 'pictorialBar'
+  | 'themeRiver'
+  | 'calendar'
+  | 'chord'
+  | 'kpi'
+  | 'table'
+  | 'pivot'
+  | 'custom';
+
+interface ChartData {
+  categories?: string[];
+  dimensions?: Array<{ name: string; data: any[] }>;
+  series: Array<{
+    name: string;
+    data?: any[];
+    value?: number;
+  }>;
+}
+
+interface EChartWrapperProps {
+  chartType: ChartType;
+  data: ChartData;
+  title?: string;
+  height?: string;
+  visualConfig?: Record<string, unknown>;
+  hideHeader?: boolean;
+  theme?: string;
+}
+
+const brandColors = [
+  '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B',
+  '#10B981', '#3B82F6', '#EF4444', '#14B8A6',
+  '#F97316', '#06B6D4', '#84CC16', '#A855F7',
+];
+
+function buildOption(chartType: ChartType, data: ChartData, title?: string, visualConfig?: any, theme?: string): EChartsOption {
+  // Map nested Superset config to flat structure for backward compatibility
+  const cfg = {
+    // X-Axis
+    xAxisTitle: visualConfig?.x_axis?.title,
+    xAxisShow: visualConfig?.x_axis?.show,
+    xAxisRotation: visualConfig?.x_axis?.labelRotation,
+    xAxisFormat: visualConfig?.x_axis?.format,
+    xAxisScale: visualConfig?.x_axis?.scale,
+    xAxisTruncate: visualConfig?.x_axis?.truncate,
+    
+    // Y-Axis
+    yAxisTitle: visualConfig?.y_axis?.title,
+    yAxisShow: visualConfig?.y_axis?.show,
+    yAxisFormat: visualConfig?.y_axis?.format,
+    yAxisScale: visualConfig?.y_axis?.scale,
+    yAxisTruncate: visualConfig?.y_axis?.truncate,
+    
+    // Legend
+    showLegend: visualConfig?.legend?.show,
+    legendOrientation: visualConfig?.legend?.orientation,
+    legendPosition: visualConfig?.legend?.position,
+    legendSortBy: visualConfig?.legend?.sortBy,
+    
+    // Data Labels
+    showLabels: visualConfig?.dataLabels?.show,
+    labelPosition: visualConfig?.dataLabels?.position,
+    labelFormat: visualConfig?.dataLabels?.format,
+    labelShowZero: visualConfig?.dataLabels?.showZero,
+    
+    // Bar chart
+    stacked: visualConfig?.bar?.stacking,
+    barOrientation: visualConfig?.bar?.orientation,
+    barWidth: visualConfig?.bar?.barWidth,
+    
+    // Line chart
+    smoothCurves: visualConfig?.line?.smooth,
+    showPoints: visualConfig?.line?.showPoints,
+    areaFill: visualConfig?.line?.areaFill,
+    areaOpacity: visualConfig?.line?.areaOpacity,
+    
+    // Pie chart
+    pieDonut: visualConfig?.pie?.donut,
+    pieInnerRadius: visualConfig?.pie?.innerRadius,
+    pieOuterRadius: visualConfig?.pie?.outerRadius,
+    
+    // Tooltip
+    tooltipShow: visualConfig?.tooltip?.show,
+    tooltipTrigger: visualConfig?.tooltip?.trigger,
+    
+    // Legacy flat props (for backward compatibility)
+    colorPalette: visualConfig?.colorPalette,
+    backgroundColor: visualConfig?.backgroundColor,
+  };
+  
+  const colors = (theme && theme !== 'default') ? undefined : (cfg.colorPalette || brandColors);
+  const showLegend = cfg.showLegend !== false;
+  const baseOption: EChartsOption = {
+    tooltip: { trigger: chartType === 'pie' || chartType === 'donut' ? 'item' : 'axis' },
+    color: colors,
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: showLegend && (chartType === 'bar' || chartType === 'line' || chartType === 'area') ? '12%' : '8%',
+      containLabel: true
+    },
+    title: title ? { text: title, textStyle: { fontSize: 14, fontWeight: 600, color: '#1E293B' } } : undefined,
+  };
+
+  switch (chartType) {
+    case 'bar':
+      return {
+        ...baseOption,
+        xAxis: {
+          type: 'category',
+          data: data.categories,
+          name: cfg.xAxisTitle || undefined,
+          nameLocation: 'middle',
+          nameGap: 35,
+          nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b' },
+          axisLabel: {
+            rotate: cfg.xAxisRotation || 0,
+            truncate: cfg.xAxisTruncate !== false
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: cfg.yAxisTitle || undefined,
+          nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b', align: 'right' }
+        },
+        series: data.series.map((s) => ({
+          name: s.name,
+          type: 'bar',
+          data: s.data,
+          stack: cfg.stacked ? 'total' : undefined,
+          label: { show: cfg.showLabels !== false, position: cfg.labelPosition || 'top' },
+          barMaxWidth: cfg.barWidth || 40,
+          itemStyle: { borderRadius: [4, 4, 0, 0] },
+        })),
+        legend: { 
+          show: cfg.showLegend !== false, 
+          bottom: 0,
+          orient: cfg.legendOrientation || 'horizontal',
+          type: cfg.legendPosition === 'inside' ? undefined : 'scroll'
+        },
+      };
+
+    case 'line':
+      return {
+        ...baseOption,
+        xAxis: {
+          type: 'category',
+          data: data.categories,
+          boundaryGap: false,
+          name: cfg.xAxisTitle || undefined,
+          nameLocation: 'middle',
+          nameGap: 35,
+          nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b' },
+          axisLabel: {
+            rotate: cfg.xAxisRotation || 0,
+            truncate: cfg.xAxisTruncate !== false
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: cfg.yAxisTitle || undefined,
+          nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b', align: 'right' }
+        },
+        series: data.series.map((s) => ({
+          name: s.name,
+          type: 'line',
+          data: s.data,
+          stack: cfg.stacked ? 'total' : undefined,
+          label: { show: cfg.showLabels !== false, position: cfg.labelPosition || 'top' },
+          smooth: cfg.smoothCurves === true,
+          symbol: cfg.showPoints !== false ? 'circle' : 'none',
+          symbolSize: 6,
+        })),
+        legend: { 
+          show: cfg.showLegend !== false, 
+          bottom: 0,
+          orient: cfg.legendOrientation || 'horizontal'
+        },
+      };
+
+    case 'area':
+      return {
+        ...baseOption,
+        xAxis: {
+          type: 'category',
+          data: data.categories,
+          boundaryGap: false,
+          name: cfg.xAxisTitle || undefined,
+          nameLocation: 'middle',
+          nameGap: 35,
+          nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b' },
+          axisLabel: {
+            rotate: cfg.xAxisRotation || 0,
+            truncate: cfg.xAxisTruncate !== false
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: cfg.yAxisTitle || undefined,
+          nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b', align: 'right' }
+        },
+        series: data.series.map((s, i) => ({
+          name: s.name,
+          type: 'line',
+          data: s.data,
+          stack: cfg.stacked ? 'total' : undefined,
+          label: { show: cfg.showLabels !== false, position: cfg.labelPosition || 'top' },
+          smooth: cfg.smoothCurves === true,
+          areaStyle: cfg.areaFill ? { opacity: cfg.areaOpacity || 0.25 } : undefined,
+          symbol: cfg.showPoints !== false ? 'circle' : 'none',
+          symbolSize: 6,
+          itemStyle: colors ? { color: colors[i % colors.length] } : undefined,
+        })),
+        legend: { 
+          show: cfg.showLegend !== false, 
+          bottom: 0,
+          orient: cfg.legendOrientation || 'horizontal'
+        },
+      };
+
+    case 'pie': {
+      const pieData = data.categories && data.categories.length > 0 && data.series[0]?.data
+        ? data.categories.map((c, i) => ({ name: c, value: data.series[0].data?.[i] }))
+        : data.series.map((s) => ({ name: s.name, value: s.value }));
+      return {
+        ...baseOption,
+        series: [
+          {
+            type: 'pie',
+            radius: cfg.pieDonut 
+              ? [`${cfg.pieInnerRadius || 40}%`, `${cfg.pieOuterRadius || 75}%`]
+              : `${cfg.pieOuterRadius || 65}%`,
+            data: pieData,
+            label: { 
+              show: cfg.showLabels !== false,
+              formatter: '{b}: {d}%',
+              position: cfg.labelPosition || 'outside'
+            },
+            itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+          },
+        ],
+        legend: { 
+          show: cfg.showLegend !== false,
+          bottom: 0, 
+          type: 'scroll',
+          orient: cfg.legendOrientation || 'horizontal'
+        },
+      };
+    }
+
+    case 'donut': {
+      const donutData = data.categories && data.categories.length > 0 && data.series[0]?.data
+        ? data.categories.map((c, i) => ({ name: c, value: data.series[0].data?.[i] }))
+        : data.series.map((s) => ({ name: s.name, value: s.value }));
+      return {
+        ...baseOption,
+        series: [
+          {
+            type: 'pie',
+            radius: [`${cfg.pieInnerRadius || 40}%`, `${cfg.pieOuterRadius || 75}%`],
+            data: donutData,
+            label: { 
+              show: cfg.showLabels !== false,
+              formatter: '{b}: {d}%',
+              position: cfg.labelPosition || 'outside'
+            },
+            itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+          },
+        ],
+        legend: { 
+          show: cfg.showLegend !== false,
+          bottom: 0, 
+          type: 'scroll',
+          orient: cfg.legendOrientation || 'horizontal'
+        },
+      };
+    }
+
+    case 'scatter':
+      return {
+        ...baseOption,
+        xAxis: { type: 'value' },
+        yAxis: { type: 'value' },
+        series: data.series.map((s) => ({
+          name: s.name,
+          type: 'scatter',
+          data: s.data,
+          symbolSize: 10,
+        })),
+      };
+
+    case 'radar':
+      return {
+        ...baseOption,
+        radar: {
+          indicator: data.categories?.map((c) => ({ name: c, max: 100 })) || [],
+        },
+        series: [
+          {
+            type: 'radar',
+            data: data.series.map((s) => ({ name: s.name, value: s.data })),
+          },
+        ],
+      };
+
+    case 'boxplot':
+      return {
+        ...baseOption,
+        xAxis: { type: 'category', data: data.categories },
+        yAxis: { type: 'value' },
+        series: data.series.map((s) => ({
+          name: s.name,
+          type: 'boxplot',
+          data: s.data,
+        })),
+      };
+
+    case 'treemap': {
+      const treeData = data.categories && data.categories.length > 0 && data.series[0]?.data
+        ? data.categories.map((c, i) => ({ name: c, value: data.series[0].data?.[i] }))
+        : data.series.map((s) => ({ name: s.name, value: s.value }));
+      return {
+        ...baseOption,
+        series: [{
+          type: 'treemap',
+          data: treeData
+        }]
+      };
+    }
+
+    case 'sunburst': {
+      const sunData = data.categories && data.categories.length > 0 && data.series[0]?.data
+        ? data.categories.map((c, i) => ({ name: c, value: data.series[0].data?.[i] }))
+        : data.series.map((s) => ({ name: s.name, value: s.value }));
+      return {
+        ...baseOption,
+        series: [{
+          type: 'sunburst',
+          data: sunData,
+          radius: [0, '90%'],
+          label: { rotate: 'radial' }
+        }]
+      };
+    }
+
+    case 'funnel': {
+      const funnelData = data.categories && data.categories.length > 0 && data.series[0]?.data
+        ? data.categories.map((c, i) => ({ name: c, value: data.series[0].data?.[i] }))
+        : data.series.map((s) => ({ name: s.name, value: s.value }));
+      return {
+        ...baseOption,
+        series: [{
+          type: 'funnel',
+          left: '10%',
+          top: 60,
+          bottom: 60,
+          width: '80%',
+          data: funnelData
+        }],
+        legend: { bottom: 0 }
+      };
+    }
+
+    case 'gauge': {
+      const gaugeData = data.categories && data.categories.length > 0 && data.series[0]?.data
+        ? data.categories.map((c, i) => ({ name: c, value: data.series[0].data?.[i] }))
+        : data.series.map((s) => ({ name: s.name, value: s.value }));
+      return {
+        ...baseOption,
+        series: [{
+          type: 'gauge',
+          progress: { show: true, width: 18 },
+          axisLine: { lineStyle: { width: 18 } },
+          axisTick: { show: false },
+          splitLine: { length: 15, lineStyle: { width: 2, color: '#999' } },
+          axisLabel: { distance: 25, color: '#999', fontSize: 14 },
+          anchor: { show: true, showAbove: true, size: 25, itemStyle: { borderWidth: 10 } },
+          title: { show: false },
+          detail: { valueAnimation: true, formatter: '{value}', color: 'inherit' },
+          data: gaugeData
+        }]
+      };
+    }
+
+    case 'graph':
+      return {
+        ...baseOption,
+        series: [{
+          type: 'graph',
+          layout: 'force',
+          data: data.series.map(s => ({ name: s.name, value: s.value, symbolSize: 30 })),
+          force: { repulsion: 100 },
+          label: { show: true }
+        }]
+      };
+
+    case 'sankey':
+      return {
+        ...baseOption,
+        series: [{
+          type: 'sankey',
+          emphasis: { focus: 'adjacency' },
+          data: data.series.map(s => ({ name: s.name })),
+          links: []
+        }]
+      };
+
+    case 'parallel':
+      return {
+        ...baseOption,
+        parallelAxis: data.categories?.map((c, i) => ({ dim: i, name: c })) || [],
+        series: [{
+          type: 'parallel',
+          lineStyle: { width: 4 },
+          data: data.series.map(s => s.data)
+        }]
+      };
+
+    case 'pictorialBar':
+      return {
+        ...baseOption,
+        xAxis: { type: 'category', data: data.categories },
+        yAxis: { type: 'value' },
+        series: data.series.map(s => ({
+          type: 'pictorialBar',
+          symbol: 'roundRect',
+          symbolRepeat: 'fixed',
+          symbolMargin: '5%',
+          symbolSize: 20,
+          data: s.data
+        }))
+      };
+
+    case 'themeRiver':
+      return {
+        ...baseOption,
+        singleAxis: { type: 'time', bottom: '10%', top: '10%' },
+        series: [{
+          type: 'themeRiver',
+          data: data.series.flatMap(s => s.data?.map((d, i) => [data.categories?.[i], d, s.name]) || []) as any
+        }]
+      };
+
+    case 'calendar': {
+      const calData = data.series[0]?.data || [];
+      let maxVal = 0;
+      let minYear = new Date().getFullYear();
+      let maxYear = minYear;
+
+      calData.forEach(item => {
+        const val = item[1];
+        if (val > maxVal) maxVal = val;
+        const year = parseInt(item[0].substring(0, 4));
+        if (!isNaN(year)) {
+          if (year < minYear) minYear = year;
+          if (year > maxYear) maxYear = year;
+        }
+      });
+
+      return {
+        ...baseOption,
+        visualMap: { min: 0, max: maxVal || 1000, type: 'continuous', orient: 'horizontal', left: 'center', top: 65, calculable: true },
+        calendar: { top: 120, left: 30, right: 30, cellSize: ['auto', 13], range: maxYear.toString(), itemStyle: { borderWidth: 0.5 }, yearLabel: { show: true } },
+        series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: calData }]
+      };
+    }
+
+    case 'heatmap': {
+      let maxVal = 0;
+      data.series.forEach(s => {
+        if (s.data) s.data.forEach(v => { if (v > maxVal) maxVal = v; });
+      });
+      return {
+        ...baseOption,
+        xAxis: { type: 'category', data: data.categories },
+        yAxis: { type: 'category', data: data.series.map(s => s.name) },
+        visualMap: { min: 0, max: maxVal || 100, calculable: true, orient: 'horizontal', left: 'center', bottom: '15%' },
+        series: [{
+          name: 'Value',
+          type: 'heatmap',
+          data: data.series.flatMap((s, i) => s.data?.map((v, j) => [j, i, v]) || []),
+          label: { show: true }
+        }]
+      };
+    }
+
+    case 'custom':
+      // Custom charts are now handled in a useEffect below to support timers/intervals safely
+      return {};
+
+    default:
+      // Fallback to bar chart for basic types
+      return {
+        ...baseOption,
+        xAxis: { type: 'category', data: data.categories },
+        yAxis: { type: 'value' },
+        series: data.series.map((s) => ({
+          name: s.name,
+          type: 'bar',
+          data: s.data,
+        })),
+      };
+  }
+}
+
+const EChartWrapper: React.FC<EChartWrapperProps> = ({
+  chartType,
+  data,
+  title,
+  height = '350px',
+  visualConfig,
+  hideHeader = false,
+  theme = 'default',
+}) => {
+  // Fetch dynamic custom themes to enable reactive theme background and styles mapping
+  const { data: dbThemes } = useQuery<any[]>({
+    queryKey: ['themes'],
+    queryFn: async () => {
+      const response = await api.get('/api/themes/');
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000
+  });
+
+  const themeMeta = useMemo(() => {
+    const baseMeta = getThemeMeta(theme);
+    
+    if (dbThemes && theme && theme !== 'default') {
+      const normalizedTheme = theme.toLowerCase().replace(/\s+/g, '_');
+      const foundTheme = dbThemes.find(t => {
+        const tId = t.name.toLowerCase().replace(/\s+/g, '_');
+        return tId === normalizedTheme || t.name === theme;
+      });
+      
+      if (foundTheme) {
+        const themeObj = foundTheme.config?.theme || foundTheme.config;
+        if (themeObj) {
+          const bg = themeObj.backgroundColor && themeObj.backgroundColor !== 'transparent' ? themeObj.backgroundColor : '#ffffff';
+          
+          // Local helper to calculate dark/light luminance
+          const isDarkColor = (colorStr: string): boolean => {
+            if (!colorStr || colorStr === 'transparent') return false;
+            let hex = colorStr.trim().replace('#', '');
+            if (hex.length === 3) {
+              hex = hex.split('').map(c => c + c).join('');
+            }
+            if (hex.length !== 6) return false;
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+            const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+            return yiq < 128;
+          };
+          
+          const isDark = themeObj.isDark || isDarkColor(bg);
+          const textColor = themeObj.textStyle?.color || (isDark ? '#f3f4f6' : '#1e293b');
+          const border = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+          const colors = themeObj.color || baseMeta.colors;
+          
+          return {
+            background: bg,
+            text: textColor,
+            border: border,
+            primary: colors[0] || baseMeta.primary,
+            secondary: colors[1] || colors[0] || baseMeta.secondary,
+            colors: colors
+          };
+        }
+      }
+    }
+    
+    return baseMeta;
+  }, [theme, dbThemes]);
+
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' | null }>({
+    key: '',
+    direction: null
+  });
+
+  const [scrollTop, setScrollTop] = useState(0);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Virtualization constants
+  const rowHeight = 32;
+  const overscan = 10;
+
+  const chartRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || chartType === 'kpi' || chartType === 'table' || chartType === 'pivot') return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (chartRef.current) {
+        try {
+          const echartInstance = chartRef.current.getEchartsInstance();
+          echartInstance.resize();
+        } catch (e) {
+          // Ignore if instance is not yet fully initialized
+        }
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    const resizeChart = () => {
+      if (chartRef.current) {
+        try {
+          chartRef.current.getEchartsInstance().resize();
+        } catch (e) {}
+      }
+    };
+
+    // Call resize across the duration of standard CSS transitions (300-500ms)
+    // This ensures that even if a layout expands/collapses, the chart snaps correctly to the final width
+    const t1 = setTimeout(resizeChart, 150);
+    const t2 = setTimeout(resizeChart, 350);
+    const t3 = setTimeout(resizeChart, 600);
+
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [chartType, data]);
+
+  const option = useMemo(() => {
+    const opt = buildOption(chartType, data, title, visualConfig, theme);
+    // If we are using custom header styles, we might want to hide the internal ECharts title
+    // to avoid duplication, but only if the user has configured header styles.
+    if (visualConfig?.headerBackgroundColor || visualConfig?.headerTextColor) {
+      if (opt.title) (opt.title as any).show = false;
+    }
+    return opt;
+  }, [chartType, data, title, visualConfig, theme]);
+
+  // Handle custom chart logic with interval cleanup
+  useEffect(() => {
+    if (chartType !== 'custom' || !visualConfig?.code || !chartRef.current) return;
+    
+    let timerIds: number[] = [];
+    let intervalIds: number[] = [];
+    
+    try {
+      const echartInstance = chartRef.current.getEchartsInstance();
+      // Clear before running to ensure a clean slate
+      echartInstance.clear();
+      
+      const safeSetTimeout = (handler: TimerHandler, timeout?: number, ...args: any[]) => {
+        const id = window.setTimeout(handler, timeout, ...args);
+        timerIds.push(id);
+        return id;
+      };
+      
+      const safeSetInterval = (handler: TimerHandler, timeout?: number, ...args: any[]) => {
+        const id = window.setInterval(handler, timeout, ...args);
+        intervalIds.push(id);
+        return id;
+      };
+
+      const myChart = {
+        setOption: (opt: any) => {
+          echartInstance.setOption(opt);
+          return opt;
+        }
+      };
+      
+      const sandboxCode = `
+        var option = {};
+        try {
+          ${visualConfig.code}
+          if (Object.keys(option).length > 0) {
+            myChart.setOption(option);
+          }
+        } catch (err) {
+          console.error("Error in custom chart code:", err);
+          myChart.setOption({ title: { text: 'Execution Error', subtext: err.toString() } });
+        }
+        return option;
+      `;
+      
+      const $ = {
+        get: (url: string, cb: Function) => {
+          fetch(url).then(res => res.json()).then(d => cb(d)).catch(console.error);
+        }
+      };
+
+      const fn = new Function(
+        'myChart', 'echarts', 'data', 'visualConfig', '$', 'setTimeout', 'setInterval',
+        sandboxCode
+      );
+      
+      fn(myChart, echarts, data, visualConfig, $, safeSetTimeout, safeSetInterval);
+      
+    } catch (e) {
+      console.error('Custom chart execution wrapper failed:', e);
+    }
+    
+    return () => {
+      timerIds.forEach(id => window.clearTimeout(id));
+      intervalIds.forEach(id => window.clearInterval(id));
+    };
+  }, [chartType, visualConfig?.code, data, chartRef.current]);
+
+  const sortedRows = useMemo(() => {
+    const rowCount = (data.dimensions?.[0]?.data || data.categories || []).length;
+    const rowIndices = Array.from({ length: rowCount }, (_, i) => i);
+
+    if (!sortConfig.key || !sortConfig.direction) return rowIndices;
+
+    return [...rowIndices].sort((a, b) => {
+      let valA, valB;
+
+      // Find if key is in dimensions
+      const dim = data.dimensions?.find(d => d.name === sortConfig.key);
+      if (dim) {
+        valA = dim.data[a];
+        valB = dim.data[b];
+      } else if (sortConfig.key === 'Dimension' && data.categories) {
+        valA = data.categories[a];
+        valB = data.categories[b];
+      } else {
+        // Check series
+        const ser = data.series.find(s => s.name === sortConfig.key);
+        if (ser && ser.data) {
+          valA = ser.data[a];
+          valB = ser.data[b];
+        }
+      }
+
+      if (valA === valB) return 0;
+      if (valA === undefined || valA === null) return 1;
+      if (valB === undefined || valB === null) return -1;
+
+      const result = valA < valB ? -1 : 1;
+      return sortConfig.direction === 'asc' ? result : -result;
+    });
+  }, [data, sortConfig]);
+
+  const containerHeight = tableContainerRef.current?.clientHeight || 400;
+  
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(sortedRows.length, Math.floor((scrollTop + containerHeight) / rowHeight) + overscan);
+  
+  const visibleRows = useMemo(() => {
+    return sortedRows.slice(startIndex, endIndex);
+  }, [sortedRows, startIndex, endIndex]);
+
+  const topPadding = startIndex * rowHeight;
+  const bottomPadding = Math.max(0, (sortedRows.length - endIndex) * rowHeight);
+
+  const toggleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key ? (prev.direction === 'asc' ? 'desc' : prev.direction === 'desc' ? null : 'asc') : 'asc'
+    }));
+  };
+
+  const SortIcon = ({ colKey }: { colKey: string }) => {
+    if (sortConfig.key !== colKey || !sortConfig.direction) return <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={12} style={{ color: themeMeta.primary }} /> : <ChevronDown size={12} style={{ color: themeMeta.primary }} />;
+  };
+
+  const isCustomThemeActive = theme && theme !== 'default';
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        height,
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        containerType: 'inline-size',
+        backgroundColor: isCustomThemeActive ? themeMeta.background : ((visualConfig?.backgroundColor as any) || 'transparent'),
+        borderRadius: '8px'
+      }}
+    >
+      {/* Custom Header for non-KPI charts if title exists */}
+      {chartType !== 'kpi' && title && !hideHeader && (
+        <div
+          style={{
+            padding: '8px 16px',
+            backgroundColor: (visualConfig?.headerBackgroundColor as any) || 'transparent',
+            borderBottom: visualConfig?.headerBackgroundColor ? '1px solid rgba(0,0,0,0.05)' : 'none'
+          }}
+        >
+          <h3 style={{
+            margin: 0,
+            fontSize: `${visualConfig?.headerFontSize || 14}px`,
+            fontWeight: (visualConfig?.headerFontWeight as any) || 600,
+            fontFamily: (visualConfig?.headerFontFamily as any) || 'inherit',
+            color: (visualConfig?.headerTextColor as any) || '#1E293B'
+          }}>
+            {title}
+          </h3>
+        </div>
+      )}
+
+      <div className="flex-1 w-full flex items-center justify-center min-h-0">
+        {chartType === 'kpi' ? (
+          <div
+            className="flex flex-col items-center justify-center w-full h-full p-2 text-center overflow-hidden transition-colors duration-300 border-l-4"
+            style={{
+              backgroundColor: isCustomThemeActive ? themeMeta.background : ((visualConfig?.backgroundColor as any) || themeMeta.background),
+              borderLeftColor: themeMeta.primary
+            }}
+          >
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center w-full gap-1">
+              <span
+                className="uppercase tracking-[0.2em] w-full line-clamp-2 px-2"
+                style={{
+                  fontSize: visualConfig?.headingFontSize ? `${visualConfig.headingFontSize}px` : 'clamp(10px, 2cqw, 14px)',
+                  fontWeight: (visualConfig?.headingFontWeight as any) || 'bold',
+                  fontFamily: (visualConfig?.headingFontFamily as any) || 'Inter, sans-serif',
+                  color: isCustomThemeActive ? themeMeta.secondary : ((visualConfig?.headingColor as any) || themeMeta.secondary),
+                  lineHeight: '1.2'
+                }}
+              >
+                {data.series[0]?.name || 'Metric Value'}
+              </span>
+              <span
+                className="tracking-tighter w-full px-2 break-all"
+                style={{
+                  fontSize: visualConfig?.valueFontSize ? `${visualConfig.valueFontSize}px` : 'clamp(24px, 15cqw, 96px)',
+                  fontWeight: (visualConfig?.valueFontWeight as any) || 'black',
+                  fontFamily: (visualConfig?.valueFontFamily as any) || 'Inter, sans-serif',
+                  color: isCustomThemeActive ? themeMeta.primary : ((visualConfig?.valueColor as any) || themeMeta.primary),
+                  lineHeight: '1'
+                }}
+              >
+                {typeof data.series[0]?.value === 'number'
+                  ? data.series[0].value.toLocaleString(undefined, { maximumFractionDigits: 1 })
+                  : (data.series[0]?.data?.[0]?.toLocaleString() || '0')}
+              </span>
+            </div>
+          </div>
+        ) : chartType === 'table' || chartType === 'pivot' ? (
+          <div
+            ref={tableContainerRef}
+            onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+            className="w-full h-full overflow-auto custom-scrollbar border rounded-lg shadow-sm relative"
+            style={{
+              backgroundColor: themeMeta.background,
+              borderColor: themeMeta.border
+            }}
+          >
+            <table className="w-max text-left border-collapse min-w-full text-[11px]">
+              <thead className="sticky top-0 z-10 backdrop-blur-sm border-b-2" style={{ backgroundColor: `${themeMeta.background}ee`, borderBottomColor: themeMeta.primary }}>
+                {chartType === 'pivot' && (
+                  <tr>
+                    <th colSpan={data.dimensions?.length || 1} className="p-0 border-r" style={{ borderColor: themeMeta.border, backgroundColor: themeMeta.background }}></th>
+                    <th colSpan={data.series.length} className="px-3 py-1.5 font-bold text-center uppercase tracking-wider border-b" style={{ color: themeMeta.secondary, borderColor: themeMeta.border, backgroundColor: themeMeta.background }}>
+                      Columns / Measures
+                    </th>
+                  </tr>
+                )}
+                <tr>
+                  {data.dimensions && data.dimensions.length > 0 ? (
+                    data.dimensions.map((d, i) => (
+                      <th
+                        key={`dim-${i}`}
+                        className="px-3 py-2 font-extrabold uppercase tracking-wider border-r cursor-pointer group hover:bg-black/5 transition-colors"
+                        style={{ color: themeMeta.text, borderColor: themeMeta.border }}
+                        onClick={() => toggleSort(d.name)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          {d.name}
+                          <SortIcon colKey={d.name} />
+                        </div>
+                      </th>
+                    ))
+                  ) : (
+                    <th
+                      className="px-3 py-2 font-extrabold uppercase tracking-wider border-r cursor-pointer group hover:bg-black/5 transition-colors"
+                      style={{ color: themeMeta.text, borderColor: themeMeta.border }}
+                      onClick={() => toggleSort('Dimension')}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        {chartType === 'pivot' ? 'Row Labels' : (data.categories ? 'Dimension' : 'Index')}
+                        <SortIcon colKey="Dimension" />
+                      </div>
+                    </th>
+                  )}
+                  {data.series.map((s, i) => (
+                    <th
+                      key={`ser-${i}`}
+                      className="px-3 py-2 font-bold border-r last:border-r-0 cursor-pointer group hover:bg-black/5 transition-colors"
+                      style={{ color: themeMeta.secondary, borderColor: themeMeta.border }}
+                      onClick={() => toggleSort(s.name)}
+                    >
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="truncate max-w-[150px]" title={s.name}>{s.name}</span>
+                        <SortIcon colKey={s.name} />
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y" style={{ borderColor: themeMeta.border, backgroundColor: themeMeta.background }}>
+                {topPadding > 0 && (
+                  <tr style={{ height: topPadding }}>
+                    <td colSpan={100} className="p-0 border-0"></td>
+                  </tr>
+                )}
+                {visibleRows.map((rowIdx) => (
+                  <tr key={rowIdx} className="hover:bg-black/[0.03] transition-colors group" style={{ height: rowHeight }}>
+                    {data.dimensions && data.dimensions.length > 0 ? (
+                      data.dimensions.map((d, colIdx) => (
+                        <td key={`dim-val-${colIdx}`} className="px-3 py-1.5 font-bold whitespace-nowrap border-r group-hover:bg-black/[0.02] transition-colors" style={{ color: themeMeta.text, backgroundColor: `${themeMeta.background}cc`, borderColor: themeMeta.border }}>
+                          {String(d.data?.[rowIdx] ?? '-')}
+                        </td>
+                      ))
+                    ) : (
+                      <td className="px-3 py-1.5 font-bold whitespace-nowrap border-r group-hover:bg-black/[0.02] transition-colors" style={{ color: themeMeta.text, backgroundColor: `${themeMeta.background}cc`, borderColor: themeMeta.border }}>
+                        {data.categories?.[rowIdx] ?? '-'}
+                      </td>
+                    )}
+                    {data.series.map((s, colIdx) => {
+                      const val = s.data?.[rowIdx];
+                      const isNull = val === null || val === undefined;
+                      return (
+                        <td key={`ser-val-${colIdx}`} className="px-3 py-1.5 tabular-nums whitespace-nowrap text-right border-r last:border-r-0 group-hover:bg-black/[0.01] transition-colors" style={{ color: themeMeta.text, borderColor: themeMeta.border }}>
+                          {isNull ? <span className="text-slate-300">-</span> :
+                            typeof val === 'number' ? val.toLocaleString() : String(val)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {bottomPadding > 0 && (
+                  <tr style={{ height: bottomPadding }}>
+                    <td colSpan={100} className="p-0 border-0"></td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <ReactECharts
+            ref={chartRef}
+            option={option}
+            theme={theme && theme !== 'default' ? theme : undefined}
+            style={{ height: '100%', width: '100%' }}
+            opts={{ renderer: 'canvas' }}
+            notMerge
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EChartWrapper;

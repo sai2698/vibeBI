@@ -1,0 +1,1226 @@
+BI PLATFORM
+FULL IMPLEMENTATION BLUEPRINT
+Version 2.0  —  Vibe Coding Edition
+Frontend
+React Vite + Tailwind + Lucide
+Backend
+Python FastAPI + Celery + AI/LLM
+ Apache ECharts 
+  
+ Row Level Security 
+  
+ AI / LLM 
+  
+ Self-Service BI 
+ Drag & Drop 
+  
+ LOB Dashboards 
+  
+ Scheduler 
+  
+ Smart Mailer 
+01
+Project Overview & Goals
+This blueprint describes a full-stack, enterprise-grade BI platform built for vibe coding — meaning every module is decomposed into AI-prompt-friendly units that can be scaffolded with an LLM step by step. The platform mirrors QlikSense / Superset UX using Apache ECharts, Tailwind CSS, and Lucide React icons, backed by a Python FastAPI service layer.
+1.1  Core Objectives
+Self-service analytics: business users build dashboards without writing SQL.
+Line-of-Business (LOB) scoping: each LOB has its own dashboard catalogue and search space.
+Deep chart customisation: font, color, axis, legend, tooltip fully editable per chart (QlikSense parity).
+AI-assisted analytics: natural language to chart, smart summarisation, anomaly detection.
+Automated delivery: scheduled data refreshes + email reports (inline body + attachment).
+Full RBAC + Row Level Security across all data paths.
+Data export: CSV, XLSX, JSON, PDF directly from any chart or table.
+1.2  Full Technology Stack
+Layer
+Technology
+Version
+Notes
+Frontend Shell
+React + Vite
+18 / 5.x
+SPA, HMR, code-splitting
+Styling
+Tailwind CSS
+3.x
+Utility-first; no component lib dependency
+Icons
+Lucide React
+latest
+SVG icon set, tree-shakable
+Charts
+Apache ECharts (echarts-for-react)
+5.x
+All chart types + custom render
+Drag & Drop
+@dnd-kit/core + @dnd-kit/sortable
+6.x
+Accessible DnD for dashboard canvas
+Grid Layout
+react-grid-layout
+1.x
+Resizable widget grid
+State
+Zustand
+4.x
+Lightweight global state
+Server State
+TanStack Query (React Query)
+5.x
+Caching, polling, optimistic updates
+Forms
+React Hook Form + Zod
+7.x / 3.x
+Validation with schema
+Code Editor
+@uiw/react-codemirror
+4.x
+SQL editor in SQL Lab
+Table
+TanStack Table
+8.x
+Virtualised data tables
+Date Picker
+react-datepicker
+4.x
+Date range filters
+Backend
+Python FastAPI
+0.110+
+Async REST + WebSocket
+Auth
+python-jose + passlib
+latest
+JWT RS256 + bcrypt
+ORM
+SQLAlchemy 2.0
+2.x
+Async engine + Alembic migrations
+Task Queue
+Celery + Redis
+5.x / 7.x
+Scheduler + async query exec
+Email
+FastAPI-Mail + Jinja2
+latest
+HTML email + attachments
+AI/LLM
+OpenAI / local Ollama API
+latest
+NL-to-SQL, summarisation, anomaly
+Metadata DB
+PostgreSQL 16
+16
+All platform metadata
+Cache
+Redis 7
+7
+Result cache + session
+File Export
+openpyxl + reportlab
+latest
+XLSX, PDF generation
+02
+Database Schema
+2.1  Line of Business (LOB)
+Table: lines_of_business
+  id          SERIAL PRIMARY KEY
+  name        VARCHAR(100) UNIQUE NOT NULL   -- e.g. "Sales", "Finance", "HR"
+  slug        VARCHAR(50)  UNIQUE NOT NULL   -- url-safe: "sales", "finance"
+  description TEXT
+  icon        VARCHAR(80)                    -- Lucide icon name
+  color       VARCHAR(7)                     -- hex brand color for LOB
+  is_active   BOOLEAN DEFAULT TRUE
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+Table: lob_members  (users assigned to LOBs)
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE
+  lob_id  INT  REFERENCES lines_of_business(id) ON DELETE CASCADE
+  PRIMARY KEY (user_id, lob_id)
+2.2  Dashboard with LOB & Search
+Table: dashboards
+  id            SERIAL PRIMARY KEY
+  title         VARCHAR(200) NOT NULL
+  description   TEXT
+  lob_id        INT REFERENCES lines_of_business(id)
+  layout        JSONB NOT NULL
+  theme_id      INT REFERENCES themes(id)
+  tags          TEXT[]                        -- for search
+  is_public     BOOLEAN DEFAULT FALSE
+  is_featured   BOOLEAN DEFAULT FALSE         -- pinned in LOB home
+  owner_id      UUID REFERENCES users(id)
+  search_vector TSVECTOR                      -- pg full-text search
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+-- Full text search index
+CREATE INDEX idx_dashboard_fts ON dashboards USING GIN(search_vector);
+CREATE TRIGGER trig_dashboard_search BEFORE INSERT OR UPDATE ON dashboards
+  FOR EACH ROW EXECUTE FUNCTION
+  tsvector_update_trigger(search_vector,'pg_catalog.english',title,description);
+2.3  Chart Visual Config
+Table: charts
+  id              SERIAL PRIMARY KEY
+  title           VARCHAR(200)
+  chart_type      VARCHAR(50)  NOT NULL
+  dataset_id      INT REFERENCES datasets(id)
+  query_config    JSONB NOT NULL   -- field mappings, filters, sort, limit
+  visual_config   JSONB NOT NULL   -- full ECharts style overrides (font,color,etc)
+  lob_id          INT REFERENCES lines_of_business(id)
+  owner_id        UUID REFERENCES users(id)
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+ℹ  visual_config is the QlikSense-style customisation payload — every property of an ECharts option can be overridden here.
+2.4  Scheduler & Refresh
+Table: refresh_schedules
+  id              SERIAL PRIMARY KEY
+  name            VARCHAR(200) NOT NULL
+  target_type     VARCHAR(20)  NOT NULL  -- dataset | dashboard | chart
+  target_id       INT NOT NULL
+  cron_expression VARCHAR(100) NOT NULL  -- e.g. "0 6 * * 1-5"
+  timezone        VARCHAR(60)  DEFAULT 'UTC'
+  is_active       BOOLEAN DEFAULT TRUE
+  last_run_at     TIMESTAMPTZ
+  last_run_status VARCHAR(20)            -- success | failed | running
+  created_by      UUID REFERENCES users(id)
+2.5  Email / Mailer
+Table: email_reports
+  id               SERIAL PRIMARY KEY
+  name             VARCHAR(200) NOT NULL
+  schedule_id      INT REFERENCES refresh_schedules(id)
+  recipients       JSONB NOT NULL  -- [{email, name}]
+  subject_template TEXT NOT NULL   -- Jinja2 template string
+  body_template    TEXT NOT NULL   -- HTML Jinja2 template
+  include_charts   INT[]           -- chart IDs to render inline
+  attachments      JSONB           -- [{type:"csv"|"xlsx"|"pdf", chart_id}]
+  reply_to         VARCHAR(255)
+  is_active        BOOLEAN DEFAULT TRUE
+  created_by       UUID REFERENCES users(id)
+Table: email_report_logs
+  id            SERIAL PRIMARY KEY
+  report_id     INT REFERENCES email_reports(id)
+  sent_at       TIMESTAMPTZ DEFAULT NOW()
+  status        VARCHAR(20)    -- sent | failed | partial
+  recipients_ok INT
+  error_detail  TEXT
+2.6  AI / LLM
+Table: ai_queries
+  id            SERIAL PRIMARY KEY
+  user_id       UUID REFERENCES users(id)
+  dataset_id    INT REFERENCES datasets(id)
+  prompt        TEXT NOT NULL
+  generated_sql TEXT
+  status        VARCHAR(20)   -- pending | success | failed
+  feedback      SMALLINT      -- 1=thumbs up, -1=thumbs down (user rating)
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+03
+Tailwind CSS + Lucide React Design System
+All UI components are built with Tailwind CSS utility classes and Lucide React icons. No component library is installed — this keeps the bundle lean and gives complete visual control for vibe-coding custom looks.
+3.1  Tailwind Config (tailwind.config.js)
+module.exports = {
+  darkMode: "class",
+  content: ["./src/**/*.{tsx,ts,jsx,js}"],
+  theme: {
+    extend: {
+      colors: {
+        brand:   { DEFAULT:"#6366F1", light:"#EEF2FF", dark:"#4338CA" },
+        surface: { DEFAULT:"#FFFFFF", dark:"#1E1B4B" },
+        sidebar: { bg:"#0F172A", text:"#CBD5E1", active:"#6366F1" },
+      },
+      fontFamily: { sans:["Inter","system-ui","sans-serif"] },
+    }
+  }
+}
+3.2  Core Component Patterns (Tailwind-only)
+Component
+Tailwind Classes Pattern
+Notes
+Primary Button
+bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand-dark transition
+State: disabled:opacity-50
+Ghost Button
+border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50
+Secondary actions
+Card
+bg-white rounded-xl shadow-sm border border-slate-100 p-4
+Chart & metric containers
+Sidebar
+fixed left-0 h-full w-64 bg-sidebar-bg text-sidebar-text
+Collapsible to 56px
+Input
+w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand
+Controlled inputs
+Badge
+inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+Status indicators
+Modal
+fixed inset-0 bg-black/50 flex items-center justify-center z-50
+Portal rendered
+Toast
+fixed bottom-4 right-4 flex flex-col gap-2 z-[9999]
+Success/error feedback
+Tooltip
+absolute z-50 bg-slate-900 text-white text-xs px-2 py-1 rounded
+On hover, chart labels
+Tabs
+border-b border-slate-200 flex gap-1
+Chart builder panels
+Table
+w-full text-sm text-left border-collapse
+Data grid base
+Dropdown
+absolute bg-white shadow-lg border rounded-lg py-1 z-40
+Context menus
+3.3  Lucide Icon Usage Guide
+UI Area
+Icons Used
+Import Example
+Navigation
+LayoutDashboard, BarChart2, Database, Settings, Users, LogOut
+from "lucide-react"
+LOB Selector
+Building2, Briefcase, TrendingUp, ShieldCheck, Factory
+Mapped per LOB slug
+Chart Types
+BarChart, LineChart, PieChart, Scatter, Map, Grid
+Chart type picker
+Actions
+Download, RefreshCw, Pencil, Trash2, Share2, Eye, EyeOff
+Widget toolbar
+Data Export
+FileDown, FileText, FileSpreadsheet, File
+Export menus
+AI/LLM
+Sparkles, MessageSquare, Brain, Wand2
+AI prompts & results
+Scheduler
+Clock, Calendar, AlarmClock, Play, Pause
+Schedule config
+Mailer
+Mail, MailOpen, Paperclip, Send
+Email report screens
+Search
+Search, SlidersHorizontal, Filter, X
+Search bar, clear
+Auth
+Lock, Unlock, User, UserCog, Shield
+Login, RBAC pages
+Alerts
+AlertCircle, CheckCircle2, Info, XCircle
+Toast & inline messages
+04
+Chart Visual Customisation (QlikSense Parity)
+Every chart has a dedicated Visual Config panel — a right-side drawer that exposes the full ECharts option tree as structured form fields. Users can customise fonts, colors, axes, legends, tooltips, and series styles, then save those settings per chart instance.
+4.1  Visual Config JSON Schema (visual_config JSONB)
+{
+  "title": {
+    "show": true,
+    "text": "Monthly Revenue",
+    "textStyle": { "fontSize": 16, "fontWeight": "bold", "color": "#0F172A",
+                   "fontFamily": "Inter" }
+  },
+  "backgroundColor": "#FFFFFF",
+  "color": ["#6366F1","#8B5CF6","#06B6D4","#10B981","#F59E0B"],
+  "legend": { "show": true, "orient": "horizontal", "bottom": 0,
+              "textStyle": { "fontSize": 12, "color": "#475569" } },
+  "tooltip": { "show": true, "trigger": "axis",
+               "textStyle": { "fontSize": 12 } },
+  "xAxis": { "name": "Month", "nameTextStyle": { "fontSize": 12 },
+             "axisLabel": { "rotate": 45, "fontSize": 11, "color": "#64748B" },
+             "axisLine": { "lineStyle": { "color": "#E2E8F0" } },
+             "splitLine": { "show": false } },
+  "yAxis": { "name": "Revenue ($)", "nameTextStyle": { "fontSize": 12 },
+             "axisLabel": { "fontSize": 11, "formatter": "{value}k" },
+             "splitLine": { "lineStyle": { "type": "dashed" } } },
+  "series_overrides": [
+    { "index": 0, "type": "bar", "barWidth": "60%",
+      "itemStyle": { "borderRadius": [4,4,0,0] },
+      "label": { "show": true, "position": "top", "fontSize": 11 } }
+  ],
+  "grid": { "left": "12%", "right": "4%", "top": "15%", "bottom": "12%" },
+  "animation": true
+}
+4.2  Visual Config Panel — React Component Structure
+Panel Tab
+Controls
+ECharts Path
+General
+Title text, show/hide, font size, font weight, bg color
+title, backgroundColor
+Colors
+Series color palette (color picker array), single-series color
+color[]
+Font
+Global font family, base font size, text color
+textStyle
+X Axis
+Name, label rotate, font size, color, tick visibility, grid lines
+xAxis
+Y Axis
+Name, label format (prefix/suffix/k/M), min/max, grid line style
+yAxis
+Legend
+Show/hide, position, orient, font size, item gap
+legend
+Tooltip
+Trigger type, formatter, font size, background color
+tooltip
+Series Style
+Bar width, border radius, line width, symbol, area fill opacity
+series[]
+Labels
+Show data labels, position, font size, number format
+series[].label
+Grid
+Left/right/top/bottom padding for chart area
+grid
+Animation
+Enable/disable, duration, easing type
+animation, animationDuration
+Advanced
+Raw JSON override (code editor for power users)
+Deep merge into option
+4.3  Frontend Implementation
+// components/charts/VisualConfigPanel.tsx
+const VisualConfigPanel = ({ config, onChange }) => {
+  const [activeTab, setActiveTab] = useState("general");
+  return (
+    <div className="w-80 border-l border-slate-200 bg-white h-full overflow-y-auto">
+      <Tabs tabs={PANEL_TABS} active={activeTab} onChange={setActiveTab} />
+      <div className="p-4">
+        {activeTab === "colors" && <ColorPaletteEditor ... />}
+        {activeTab === "xAxis" && <AxisEditor axis="x" ... />}
+        {activeTab === "advanced" && <JsonEditor ... />}
+      </div>
+      <div className="p-4 border-t border-slate-200 flex gap-2">
+        <button className="btn-primary flex-1" onClick={onSave}>
+          <Save size={14}/> Save Style
+        </button>
+        <button className="btn-ghost" onClick={onReset}>Reset</button>
+      </div>
+    </div>
+  );
+};
+4.4  ECharts Option Merge Strategy
+// utils/buildEChartsOption.ts
+export function buildOption(queryResult, queryConfig, visualConfig) {
+  const base = chartTypeBuilders[queryConfig.chart_type](queryResult, queryConfig);
+  const themeDefaults = getThemeEChartsDefaults();
+  // Deep merge: base <- theme defaults <- user visual_config
+  return deepMerge(base, themeDefaults, visualConfig);
+}
+05
+Data Download & Export
+Any chart, table, or query result can be exported by users with appropriate permissions. Downloads are triggered from a toolbar icon (FileDown) on each widget and from the SQL Lab results pane.
+5.1  Export Formats
+Format
+Library
+Use Case
+Endpoint
+CSV
+Python csv stdlib
+Raw data, lightweight
+GET /api/charts/{id}/export?fmt=csv
+XLSX
+openpyxl
+Multi-sheet, formatted cells
+GET /api/charts/{id}/export?fmt=xlsx
+JSON
+stdlib json
+Developers, API consumers
+GET /api/charts/{id}/export?fmt=json
+PDF (Chart)
+Puppeteer (Node sidecar)
+Chart image as PDF
+GET /api/charts/{id}/export?fmt=pdf
+PDF (Table)
+reportlab (Python)
+Data table as PDF
+GET /api/charts/{id}/export?fmt=pdf_table
+PNG/SVG
+ECharts getDataURL()
+Chart screenshot (client-side)
+Client-side, no API call
+5.2  Backend Export Endpoint
+# charts/router.py
+@router.get("/{chart_id}/export")
+async def export_chart_data(
+    chart_id: int,
+    fmt: str = Query("csv", regex="^(csv|xlsx|json|pdf_table)$"),
+    user = Depends(get_current_user),
+    db   = Depends(get_db)
+):
+    data = await get_chart_data_internal(chart_id, user, db)
+    if fmt == "csv":
+        return StreamingResponse(to_csv(data), media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="chart_{chart_id}.csv"'}
+        )
+    elif fmt == "xlsx":
+        return StreamingResponse(to_xlsx(data), media_type=...
+    elif fmt == "json":
+        return JSONResponse(data)
+5.3  Frontend Export Widget Toolbar
+// components/dashboard/WidgetToolbar.tsx
+const WidgetToolbar = ({ chartId, chartRef }) => (
+  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100
+                  flex gap-1 bg-white/90 border border-slate-200 rounded-lg p-1 shadow-sm">
+    <ExportMenu
+      onCSV={()  => downloadFile(`/api/charts/${chartId}/export?fmt=csv`)}
+      onXLSX={() => downloadFile(`/api/charts/${chartId}/export?fmt=xlsx`)}
+      onPDF={()  => downloadFile(`/api/charts/${chartId}/export?fmt=pdf_table`)}
+      onPNG={()  => exportEChartsPNG(chartRef)}
+    />
+  </div>
+);
+06
+Self-Service BI Architecture
+Self-service BI means any business user (no SQL knowledge needed) can connect data, explore it visually, build charts, and compose dashboards without engineering involvement. The architecture separates the concerns of data modelling (done once by Analysts) from data exploration (done daily by any user).
+6.1  Self-Service Layers
+Layer
+Who Uses It
+What They Do
+Tools
+L1 — Data Connection
+Data Engineer / Admin
+Register datasources, test connections
+Datasource Manager
+L2 — Dataset Modelling
+Data Analyst
+Define virtual datasets, add computed columns, set RLS
+Dataset Editor + SQL Lab
+L3 — Chart Building
+Any Editor / Analyst
+Pick dataset, map fields, customise visuals
+Chart Builder (no-code)
+L4 — Dashboard Composition
+Any Editor
+Drag charts to canvas, add filters, publish to LOB
+Dashboard Builder
+L5 — Data Exploration
+Any Viewer
+Browse dashboards, apply filters, export data
+Dashboard Viewer
+L6 — AI Explore
+Any user
+Ask natural-language questions, get auto-charts
+AI Chat Panel
+6.2  No-Code Chart Builder User Journey
+Select Dataset: user picks from approved datasets for their LOB.
+Auto-Preview: first 100 rows shown in data preview table.
+Field Mapper: drag columns to X-Axis, Y-Axis, Color By, Size By zones.
+Chart Type: icon grid of chart types; platform auto-suggests best type.
+Visual Config: adjust colors, fonts, axis labels using the style drawer.
+Filter: add optional WHERE conditions using a no-code filter builder.
+Save to LOB: chart saved under user's LOB; visible to LOB members.
+6.3  Dataset Semantic Layer
+Table: dataset_columns  (enriches physical columns with BI metadata)
+  id              SERIAL PRIMARY KEY
+  dataset_id      INT REFERENCES datasets(id)
+  column_name     VARCHAR(200) NOT NULL
+  friendly_name   VARCHAR(200)            -- "Monthly Revenue" vs "rev_monthly"
+  description     TEXT                    -- shown in field picker tooltip
+  data_type       VARCHAR(50)             -- dimension | measure | date
+  format_string   VARCHAR(100)            -- "$#,##0" | "0.0%" | "DD MMM YYYY"
+  is_filterable   BOOLEAN DEFAULT TRUE
+  is_groupable    BOOLEAN DEFAULT TRUE
+  expression      TEXT                    -- computed: "revenue - cost"
+6.4  Computed Metrics
+Table: dataset_metrics
+  id            SERIAL PRIMARY KEY
+  dataset_id    INT REFERENCES datasets(id)
+  name          VARCHAR(200) NOT NULL
+  friendly_name VARCHAR(200)
+  expression    TEXT NOT NULL  -- SUM(revenue), AVG(margin), COUNT(DISTINCT user_id)
+  description   TEXT
+07
+AI / LLM Capabilities
+AI capabilities are surfaced as assistive features woven into the existing BI workflow. The LLM backend can be OpenAI GPT-4o, Anthropic Claude, or a self-hosted Ollama model — the integration is abstracted behind a single AIProvider interface.
+7.1  Feature Map
+Feature
+Entry Point
+What It Does
+LLM Call
+NL to SQL
+SQL Lab AI button
+Turns plain-English question into SQL query
+prompt + schema context -> SQL
+NL to Chart
+Dashboard AI panel + icon
+Question -> chart type + config automatically built
+prompt + columns -> chart config JSON
+Smart Title
+Chart builder
+Suggests chart title from data + config
+config snapshot -> title suggestion
+Data Summary
+Widget toolbar
+Generates 2-3 sentence insight from chart data
+data sample -> narrative
+Anomaly Flags
+Widget overlay
+Highlights outlier data points with natural explanation
+data series -> anomaly report
+Filter Suggestions
+Filter bar
+Suggests relevant filters based on dashboard context
+layout + data -> filter suggestions
+Auto Dashboard
+AI panel
+User describes goal; AI builds full dashboard layout
+goal prompt -> layout + chart configs
+Chat with Data
+Sidebar chat
+Multi-turn Q&A on a dataset
+conversation + schema -> SQL -> result -> prose
+7.2  NL-to-SQL Implementation
+# ai/nl_to_sql.py
+SYSTEM_PROMPT = """
+You are a SQL expert. Given a database schema and a plain-English question,
+return ONLY a valid SQL SELECT query. No explanations, no markdown fences.
+The query must be read-only. Use table alias for clarity.
+Schema: {schema}
+"""
+async def nl_to_sql(prompt: str, dataset: Dataset, user: User) -> str:
+    schema_ctx = build_schema_context(dataset)
+    messages = [
+        {"role":"system","content":SYSTEM_PROMPT.format(schema=schema_ctx)},
+        {"role":"user","content": prompt}
+    ]
+    sql = await llm_provider.complete(messages)
+    sql = apply_rls(sql, dataset.id, user)   # RLS always applied
+    validate_readonly(sql)                    # block DDL/DML
+    return sql
+7.3  NL-to-Chart Implementation
+# ai/nl_to_chart.py
+CHART_PROMPT = """
+Given these columns: {columns}
+And this user request: "{question}"
+Return a JSON object with:
+  chart_type: one of [bar,line,pie,scatter,area,heatmap,treemap]
+  x_axis: column name
+  y_axis: [{column, agg}]
+  group_by: column name or null
+  title: suggested chart title
+Return ONLY valid JSON, no markdown.
+"""
+7.4  AI Panel UI (React)
+// features/ai/AIPanel.tsx
+const AIPanel = () => {
+  const [messages, setMessages] = useState([]);
+  return (
+    <div className="flex flex-col h-full bg-white border-l border-slate-200 w-96">
+      <div className="p-4 border-b flex items-center gap-2">
+        <Sparkles size={18} className="text-brand" />
+        <span className="font-semibold text-slate-800">Ask your data</span>
+      </div>
+      <ChatMessages messages={messages} />
+      <AIInput onSubmit={handleAIQuery} />
+    </div>
+  );
+};
+7.5  LLM Provider Abstraction
+# ai/provider.py
+class AIProvider(ABC):
+    @abstractmethod
+    async def complete(self, messages: list[dict]) -> str: ...
+class OpenAIProvider(AIProvider):
+    async def complete(self, messages): ...  # calls openai.chat.completions
+class OllamaProvider(AIProvider):
+    async def complete(self, messages): ...  # calls http://localhost:11434
+# config.py: AI_PROVIDER = "openai" | "ollama" | "anthropic"
+08
+Refresh Scheduler & Task Queue
+The scheduler uses Celery Beat for cron-based task scheduling with Redis as the broker. Dataset refreshes, cache invalidations, email report delivery, and AI insight pre-computation are all managed as Celery tasks.
+8.1  Scheduler Architecture
+Component
+Technology
+Responsibility
+Task Broker
+Redis 7
+Message queue between FastAPI and Celery workers
+Task Scheduler
+Celery Beat
+Reads cron expressions from DB, fires tasks on schedule
+Workers
+Celery Worker (N replicas)
+Execute tasks: query, email, cache warm
+Result Backend
+Redis
+Stores task state and results
+Admin UI
+Flower (optional)
+Monitor task queue in development
+8.2  Schedule Configuration API
+Method
+Path
+Action
+GET
+/api/schedules
+List all schedules (admin/owner)
+POST
+/api/schedules
+Create new schedule with cron expression
+PATCH
+/api/schedules/{id}
+Update schedule (cron, timezone, active flag)
+DELETE
+/api/schedules/{id}
+Delete schedule and cancel pending tasks
+POST
+/api/schedules/{id}/run
+Trigger immediate run (manual refresh)
+GET
+/api/schedules/{id}/history
+Last 50 run results with status
+8.3  Celery Tasks
+# tasks/refresh.py
+@celery.task(bind=True, max_retries=3)
+def refresh_dataset_cache(self, dataset_id: int):
+    """Warms Redis cache for all charts using this dataset."""
+    charts = get_charts_for_dataset(dataset_id)
+    for chart in charts:
+        sql  = build_query(chart)
+        sql  = apply_rls_base_filters(sql, dataset_id)   # base filters only
+        rows = execute_query(chart.dataset.datasource, sql)
+        cache.set(fingerprint(sql), rows, ttl=3600)
+@celery.task
+def send_email_report(report_id: int):
+    """Render charts, build HTML body, attach files, send email."""
+    report = get_report(report_id)
+    context = build_report_context(report)  # renders charts to PNG bytes
+    send_email(report, context)
+8.4  Cron Expression Helper (Frontend)
+Schedule form has both a cron text input and a human-readable picker.
+Presets: Every hour, Every day at 6 AM, Every Monday 8 AM, Every 1st of month.
+Live preview shows: "Next run: Tuesday 28 Apr 2026 06:00 IST".
+Timezone picker (IANA tzdb) so schedules respect business hours.
+09
+Email Reports & Smart Mailer
+The mailer system sends automated data reports on a schedule. Each report can include rendered chart images inline in the email body (using base64 CID attachments) and/or data files (CSV, XLSX, PDF) as file attachments.
+9.1  Email Report Types
+Type
+Body Content
+Attachment
+Trigger
+Dashboard Snapshot
+HTML table + inline chart PNGs
+Optional: full XLSX
+Schedule or manual
+KPI Digest
+Big-number metrics, trend arrows, AI summary paragraph
+None
+Daily/Weekly schedule
+Anomaly Alert
+AI-generated anomaly description + highlighted chart
+CSV of anomalous rows
+Real-time on detection
+SQL Result
+Raw query result as formatted HTML table
+CSV / XLSX of result
+Schedule
+Ad-hoc Share
+User-composed email with chosen charts
+User picks attachments
+Manual (from UI)
+9.2  Email Template System (Jinja2)
+<!-- templates/email/kpi_digest.html -->
+<html><body style="font-family: Inter, sans-serif;">
+  <div style="max-width:640px; margin:auto; padding:24px;">
+    <h1 style="color:#6366F1;">{{ report.name }}</h1>
+    <p style="color:#64748B;">{{ period_label }}  |  {{ lob_name }}</p>
+    {% for chart in charts %}
+    <div style="margin-bottom:24px;">
+      <h3>{{ chart.title }}</h3>
+      <img src="cid:chart_{{ chart.id }}" width="600" alt="{{ chart.title }}" />
+      {% if chart.ai_summary %}
+      <p style="background:#F8FAFC; padding:12px; border-radius:8px;">
+        {{ chart.ai_summary }}
+      </p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</body></html>
+9.3  Backend Email Send (FastAPI-Mail + Celery)
+# tasks/mailer.py
+async def send_email_report(report_id: int):
+    report   = await db.get(EmailReport, report_id)
+    charts   = await fetch_charts(report.include_charts)
+    # Render charts to PNG using Playwright headless browser
+    chart_images = {}
+    for c in charts:
+        chart_images[c.id] = await render_echart_to_png(c)
+    # Build attachments
+    attachments = []
+    for att in report.attachments:
+        file_bytes = export_chart(att["chart_id"], att["type"])
+        attachments.append({"filename": f"data.{att['type']}", "data": file_bytes})
+    # Render HTML body
+    html_body = jinja_env.get_template("kpi_digest.html").render(
+        report=report, charts=charts)
+    await fast_mail.send_message(MessageSchema(
+        subject  = render_template(report.subject_template),
+        recipients=[r["email"] for r in report.recipients],
+        body     = html_body,
+        subtype  = MessageType.html,
+        attachments= attachments,
+    ))
+9.4  Mailer Config UI (Frontend)
+Email Reports page at /admin/email-reports — list, create, edit, test.
+"Send Test" button fires the report immediately to the current user's email.
+Recipient list supports manual entries and LOB-group sync.
+Subject template supports {{ report_date }}, {{ lob_name }}, {{ period }} tokens.
+Chart selector: checkbox list of charts; each chart shows include-in-body toggle and attachment format dropdown.
+10
+Dashboard Search & LOB-Based Views
+Users belong to one or more Lines of Business (LOBs). The platform's home screen and navigation are scoped to the user's LOBs. Search is both within-LOB (default) and cross-LOB (for admins and analysts).
+10.1  LOB Home Page
+Each LOB has its own landing page at /lob/:slug — e.g. /lob/sales.
+LOB home shows: Featured Dashboards (pinned), Recent Dashboards, Charts, a quick-access KPI strip.
+LOB color and icon (configured in admin) are applied to the page header.
+LOB switcher in the top nav: dropdown of all LOBs the user is a member of.
+Admin can access all LOBs; regular users see only their assigned LOBs.
+10.2  Dashboard Search Architecture
+PostgreSQL Full-Text Search
+search_vector TSVECTOR column on dashboards table (see schema section 2.2).
+Trigger keeps search_vector updated on title/description/tags changes.
+Query: WHERE search_vector @@ plainto_tsquery('english', :q).
+Results ranked by ts_rank_cd(search_vector, query).
+Search Endpoint
+# search/router.py
+@router.get("/search/dashboards")
+async def search_dashboards(
+    q:      str = Query(..., min_length=1),
+    lob_id: int | None = None,
+    tags:   str | None = None,    # comma-separated
+    limit:  int = 20,
+    user    = Depends(get_current_user)
+):
+    lob_ids = get_user_lob_ids(user)  # scope to user's LOBs
+    if lob_id and lob_id in lob_ids:
+        lob_ids = [lob_id]
+    results = await db_search(q, lob_ids, tags, limit)
+    return {"results": results, "total": len(results)}
+10.3  Search UI Component
+// components/search/GlobalSearch.tsx
+const GlobalSearch = () => {
+  const [query, setQuery] = useState("");
+  const { data } = useQuery({
+    queryKey: ["search", query, activeLob],
+    queryFn: () => api.search(query, activeLob),
+    enabled: query.length > 1,
+    debounce: 300,
+  });
+  return (
+    <div className="relative w-96">
+      <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+      <input className="w-full pl-9 pr-4 py-2 border border-slate-200
+                        rounded-xl text-sm focus:ring-2 focus:ring-brand"
+             placeholder="Search dashboards, charts..."
+             value={query} onChange={e => setQuery(e.target.value)} />
+      {data && <SearchDropdown results={data.results} />}
+    </div>
+  );
+};
+10.4  Search Result Card
+Each result shows: Dashboard title, LOB badge (color-coded), description excerpt with highlighted match, tags, last updated date.
+Keyboard navigation: arrow keys move through results, Enter opens dashboard.
+Cmd/Ctrl+K opens global search modal from anywhere in the app.
+Recent searches stored in localStorage for quick access.
+10.5  LOB Admin Management
+Action
+Path
+Who Can Do It
+Create LOB
+/admin/lob (POST /api/lob)
+Superadmin
+Edit LOB
+/admin/lob/:id (PATCH /api/lob/:id)
+Superadmin
+Assign users
+/admin/lob/:id/members (POST)
+Superadmin, Admin
+Assign dashboards to LOB
+Dashboard settings panel
+Dashboard owner, Admin
+Pin dashboard to LOB home
+Dashboard settings > Mark as Featured
+Admin
+View LOB analytics
+Admin > LOB > Usage tab
+Admin
+11
+Frontend Project Structure
+11.1  Vite + React Directory Layout
+src/
+  api/                 # axios instance, typed API hooks per resource
+    index.ts           # axios with JWT interceptors
+    dashboards.ts      # useGetDashboards, useCreateDashboard, ...
+    charts.ts          # useGetChart, useChartData, ...
+    ai.ts              # useNLToSQL, useAskData, ...
+  assets/              # fonts, logo SVGs
+  components/
+    ui/                # Button, Input, Modal, Badge, Toast, Card, Dropdown
+    charts/            # EChartsWrapper, VisualConfigPanel, ChartTypeGrid
+    dashboard/         # DashboardCanvas, WidgetFrame, FilterBar, AIPanel
+    layout/            # AppShell, Sidebar, TopNav, LOBSwitcher
+    search/            # GlobalSearch, SearchDropdown, SearchModal
+    lob/               # LOBHome, LOBCard, LOBBadge
+    export/            # ExportMenu, DownloadButton
+    scheduler/         # ScheduleForm, CronPicker, ScheduleList
+    mailer/            # EmailReportForm, TemplatePreview, RecipientList
+  features/
+    auth/              # LoginPage, ForgotPassword, useAuth hook
+    dashboard/         # DashboardListPage, DashboardEditPage, DashboardViewPage
+    chart-builder/     # ChartBuilderPage, FieldMapper, PreviewPane
+    dataset/           # DatasetManager, ColumnEditor, MetricEditor
+    sql-lab/           # SQLLabPage, ResultTable, QueryHistory
+    ai/                # AIChatPanel, NLToChartPage
+    admin/             # Users, Groups, Roles, RLS, Themes, LOB, Schedules, Mailer
+    profile/           # ProfilePage, AppearancePage
+  hooks/               # useDebounce, useLOB, useDashboardFilters, useKeyboardShortcut
+  store/               # useAuthStore, useThemeStore, useFilterStore, useLOBStore
+  router/              # routes.tsx, ProtectedRoute, LOBRoute
+  theme/               # ThemeProvider, tailwindTokens, echartsTheme
+  types/               # User, Dashboard, Chart, LOB, Schedule, ... (TypeScript)
+  utils/               # queryFingerprint, deepMerge, formatNumber, formatDate
+11.2  All Routes
+Route
+Page
+Min Role
+/login
+LoginPage
+Public
+/
+Home (LOB selection)
+Any
+/lob/:slug
+LOBHomePage
+LOB Member
+/lob/:slug/dashboards
+LOBDashboardList
+LOB Member
+/dashboards
+AllDashboardsPage
+Viewer
+/dashboards/:id
+DashboardViewPage
+Viewer
+/dashboards/:id/edit
+DashboardEditPage
+Editor
+/dashboards/new
+DashboardEditPage (new)
+Editor
+/charts
+ChartListPage
+Viewer
+/charts/new
+ChartBuilderPage
+Editor
+/charts/:id/edit
+ChartBuilderPage
+Editor
+/datasets
+DatasetListPage
+Analyst
+/sql-lab
+SQLLabPage
+Analyst
+/ai/ask
+AIChatPage
+Any
+/admin/users
+UserManagementPage
+Admin
+/admin/groups
+GroupManagementPage
+Admin
+/admin/roles
+RoleManagementPage
+Admin
+/admin/rls
+RLSPoliciesPage
+Admin
+/admin/lob
+LOBManagementPage
+Superadmin
+/admin/themes
+ThemesPage
+Admin
+/admin/schedules
+SchedulesPage
+Admin
+/admin/email-reports
+EmailReportsPage
+Admin
+/profile
+ProfilePage
+Any
+/profile/appearance
+AppearancePage (theme)
+Any
+12
+Backend Project Structure (FastAPI)
+12.1  Module Layout
+backend/
+  app/
+    main.py             # app factory, CORS, routers, startup events
+    config.py           # Pydantic Settings (reads .env)
+    database.py         # async SQLAlchemy engine, session factory
+    celery_app.py       # Celery + Beat config
+    auth/               # login, refresh, logout, me, dependencies
+    users/              # CRUD users
+    groups/             # CRUD groups + membership
+    roles/              # CRUD roles + permissions
+    lob/                # CRUD lines of business + members
+    rls/                # RLS policy CRUD + clause injection
+    datasources/        # CRUD datasource connections + test
+    datasets/           # CRUD datasets + columns + metrics
+    charts/             # CRUD charts + /data + /export endpoints
+    dashboards/         # CRUD dashboards + layout + search
+    themes/             # CRUD themes
+    schedules/          # CRUD schedules + manual trigger
+    mailer/             # CRUD email reports + test send
+    ai/                 # nl_to_sql, nl_to_chart, summarise, anomaly
+    search/             # full-text search endpoint
+    query_engine/
+      builder.py        # SQL SELECT builder from chart query_config
+      rls.py            # RLS WHERE injection
+      executor.py       # async query exec + timeout + pagination
+      cache.py          # Redis fingerprint cache
+      exporter.py       # CSV/XLSX/PDF/JSON exporters
+      validators.py     # block DDL/DML, enforce limits
+    tasks/
+      refresh.py        # refresh_dataset_cache, invalidate_chart_cache
+      mailer.py         # send_email_report, render_chart_to_png
+      ai_insights.py    # pre-compute anomaly flags, summaries
+  alembic/              # DB migration scripts
+  tests/                # pytest: unit + integration + RLS bypass tests
+12.2  Config (.env)
+Variable
+Description
+Example
+DATABASE_URL
+Async PostgreSQL URL
+postgresql+asyncpg://u:p@host/bi
+REDIS_URL
+Redis connection
+redis://localhost:6379/0
+SECRET_KEY
+JWT HS256 secret
+(openssl rand -hex 32)
+AI_PROVIDER
+LLM backend choice
+openai | ollama | anthropic
+OPENAI_API_KEY
+OpenAI key if provider=openai
+sk-...
+OLLAMA_HOST
+Ollama URL if self-hosted
+http://localhost:11434
+SMTP_HOST
+SMTP server for mailer
+smtp.gmail.com
+SMTP_PORT
+SMTP port
+587
+SMTP_USER
+SMTP username
+reports@example.com
+SMTP_PASSWORD
+SMTP password / app key
+...
+FROM_EMAIL
+Sender email address
+noreply@bi.example.com
+MAX_QUERY_ROWS
+Row cap on all queries
+10000
+QUERY_TIMEOUT_SEC
+Per-query timeout
+30
+CACHE_TTL_SEC
+Default Redis cache TTL
+3600
+13
+Vibe Coding Guide — Building with AI LLM
+Vibe coding means each feature is implemented by prompting an AI coding assistant (Cursor, Copilot, Claude, etc.) with well-scoped, contextual prompts. This section gives you the exact prompting strategy and module order for building this BI platform with AI assistance.
+13.1  Vibe Coding Principles
+Prompt one module at a time — never ask for the whole app at once.
+Always include: tech stack, file path, existing imports, expected input/output.
+After each generation: test it, then commit before moving on.
+Use TypeScript interfaces and Python Pydantic schemas first — they act as contracts the AI will implement against.
+Paste your schema (DB tables, API response shapes) into every prompt that needs data.
+Say "no external component libraries — use Tailwind CSS only" in every frontend prompt.
+13.2  Prompt Templates by Module
+Backend Endpoint Prompt
+Stack: Python FastAPI, SQLAlchemy 2.0 async, Pydantic v2.
+File: backend/app/charts/router.py
+Task: Add GET /charts/{chart_id}/export endpoint.
+Input: chart_id (path), fmt (query param: csv|xlsx|json).
+Output: StreamingResponse with correct Content-Disposition header.
+Use existing get_chart_data_internal() from charts/service.py.
+Use exporter functions from query_engine/exporter.py.
+Apply RLS: always call apply_rls(sql, dataset_id, current_user).
+Return 403 if user lacks can_read permission on the chart.
+Frontend Component Prompt
+Stack: React 18, TypeScript, Tailwind CSS, Lucide React, TanStack Query.
+File: src/components/export/ExportMenu.tsx
+Task: Dropdown menu with 4 items: CSV, XLSX, PDF, PNG.
+Props: chartId: number, chartRef: RefObject<EChartsReactCore>
+CSV/XLSX/PDF: call downloadFile(url) from utils/download.ts.
+PNG: call chartRef.current?.getEchartsInstance().getDataURL() then trigger download.
+Use Lucide icons: FileDown, FileText, FileSpreadsheet, Image.
+No antd, no shadcn. Pure Tailwind only. Dropdown opens on button click.
+AI Feature Prompt
+Stack: Python FastAPI, OpenAI SDK.
+File: backend/app/ai/nl_to_sql.py
+Task: async function nl_to_sql(prompt, dataset_id, user) -> str
+Steps: 1) load dataset columns from DB, 2) build schema context string,
+3) call OpenAI chat completions with system prompt + user question,
+4) extract SQL from response, 5) call apply_rls(sql, dataset_id, user),
+6) call validate_readonly(sql) — raise 400 if DDL/DML detected, 7) return sql.
+Store prompt + result in ai_queries table for audit.
+13.3  Recommended Build Order for Vibe Coding
+Sprint
+Module
+Why This Order
+1
+DB migrations + Pydantic schemas
+Contracts first; all later prompts reference these
+1
+Auth (login, JWT, refresh, ProtectedRoute)
+Everything depends on auth
+2
+User + Group + Role CRUD APIs
+RBAC foundation
+2
+Admin UI pages (Tailwind + Lucide)
+Can test permissions visually
+3
+Datasource + Dataset APIs
+Data layer before charts
+3
+SQL Lab (editor + execution)
+Validates query engine
+4
+Chart CRUD + /data endpoint + RLS
+Core BI query path
+4
+Chart Builder UI (no-code field mapper)
+Self-service layer
+5
+ECharts wrappers + VisualConfigPanel
+Chart customisation
+5
+Dashboard canvas (RGL drag & drop)
+Composition layer
+6
+LOB tables + LOB Home + LOB switcher
+Multi-tenancy scoping
+6
+Full-text search endpoint + Search UI
+Discovery layer
+7
+Data export (CSV/XLSX/PDF/PNG)
+Download functionality
+7
+Themes (Tailwind tokens + ECharts theme)
+Polish & branding
+8
+Scheduler (Celery Beat + cron UI)
+Automation layer
+8
+Mailer (Jinja2 templates + FastAPI-Mail)
+Delivery layer
+9
+AI: NL-to-SQL + NL-to-Chart + Chat panel
+AI capabilities
+9
+AI: Data summary + Anomaly detection
+Insight layer
+10
+E2E tests, RLS audit, perf tuning, prod hardening
+Quality gate
+13.4  Copilot / Cursor Tips for This Project
+Open the relevant schema file and router file in the same editor pane before prompting — the AI will use both as context.
+For Tailwind: write one component first, then tell AI "match this style pattern for the new component".
+For RLS: always end your prompt with "and make sure RLS is applied via apply_rls() before any query execution".
+For ECharts: paste the relevant section of the ECharts option schema into your prompt for accurate option generation.
+For Celery tasks: always include the task signature and the import of the celery_app instance in your prompt.
+Use chain-of-thought: ask AI to outline steps first, then implement each step.
+14
+Implementation Roadmap — 24 Sprints
+Sprint
+Feature / Module
+Deliverable
+S1
+DB schema + Alembic + Pydantic models
+All tables created; models typed
+S2
+JWT Auth + RBAC middleware
+Login, roles, permissions working
+S3
+User/Group/Role Admin APIs
+Full CRUD with tests
+S4
+Admin UI — Users/Groups/Roles (Tailwind+Lucide)
+Working admin screens
+S5
+LOB tables + LOB CRUD API
+LOBs in DB; API tested
+S6
+LOB Home UI + LOB Switcher
+Users see per-LOB homepage
+S7
+Datasource + Dataset APIs
+Multi-DB connection manager
+S8
+SQL Lab (CodeMirror + query execution)
+Users can run SQL with RLS
+S9
+RLS Policy CRUD + injection + preview
+RLS enforced end-to-end
+S10
+Chart CRUD + Query Builder + /data endpoint
+Charts return data
+S11
+ECharts wrapper components (15 chart types)
+Charts render correctly
+S12
+Chart Builder UI — no-code field mapper
+Non-SQL users build charts
+S13
+Visual Config Panel — full QlikSense-style
+Font, color, axis editable
+S14
+Dashboard canvas — RGL drag, resize, save
+Dashboards composable
+S15
+Cross-filters + filter bar widget
+Filters work across charts
+S16
+Dashboard search (FTS) + Search UI + Cmd+K
+Dashboards discoverable
+S17
+Data export (CSV, XLSX, PDF, PNG per widget)
+All download formats work
+S18
+Theme system (Tailwind tokens + ECharts)
+6 built-in themes + custom
+S19
+Scheduler (Celery Beat + cron UI + history)
+Refresh runs on schedule
+S20
+Mailer (Jinja2 templates + attachments)
+Emails delivered correctly
+S21
+AI: NL-to-SQL + NL-to-Chart
+AI generates queries & charts
+S22
+AI: Data Summary + Anomaly Detection + Chat
+AI insights on dashboards
+S23
+Self-service semantic layer (friendly names, metrics)
+No-SQL field picker
+S24
+E2E tests, security audit, perf, Docker prod setup
+Production-ready
+END OF BLUEPRINT — BI Platform v2.0  |  24-Sprint Vibe Coding Roadmap
