@@ -11,6 +11,8 @@ export interface DrillLevel {
   filterValue: string | string[];
   /** Display label for breadcrumb */
   label: string;
+  /** Whether this level is a filter or exclude (does not change dimension) */
+  isFilter?: boolean;
 }
 
 export interface DrillDownState {
@@ -51,8 +53,13 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
   const isDrilled = drillStack.length > 0;
 
   const currentDimension = useMemo(() => {
-    if (drillStack.length === 0) return null;
-    return drillStack[drillStack.length - 1].toDimension;
+    // Find the last level in the drill stack that is not a filter
+    for (let i = drillStack.length - 1; i >= 0; i--) {
+      if (!drillStack[i].isFilter) {
+        return drillStack[i].toDimension;
+      }
+    }
+    return null;
   }, [drillStack]);
 
   const drillFilters = useMemo(() => {
@@ -112,6 +119,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
               filterColumn: col,
               filterValue: val as any,
               label: `${col} = ${labelValue}`,
+              isFilter: true,
             });
           });
         } else {
@@ -122,6 +130,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
             filterColumn: column,
             filterValue: value as any,
             label: `${column} = ${labelValue}`,
+            isFilter: true,
           });
         }
         return [...prev, ...newLevels];
@@ -144,6 +153,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
               filterColumn: col,
               filterValue: finalValue as any,
               label: `${col} ≠ ${labelValue}`,
+              isFilter: true,
             });
           });
         } else {
@@ -155,6 +165,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
             filterColumn: column,
             filterValue: finalValue as any,
             label: `${column} ≠ ${labelValue}`,
+            isFilter: true,
           });
         }
         return [...prev, ...newLevels];

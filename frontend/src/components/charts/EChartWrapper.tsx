@@ -1014,6 +1014,11 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
               visualConfig={visualConfig}
               themeMeta={themeMeta}
               onDrillContextMenu={handleReactChartContextMenu}
+              onDrillDown={onDrillDown}
+              onFilterByValue={onFilterByValue}
+              onExcludeValue={onExcludeValue}
+              availableColumns={availableColumns}
+              currentDimensionName={currentDimensionName}
             />
           </div>
         </div>
