@@ -421,6 +421,8 @@ const ChartBuilderPage: React.FC = () => {
       return api.post('/api/charts/', chartData);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['charts'] });
+      queryClient.invalidateQueries({ queryKey: ['chartData'] });
       toast.success(id ? 'Chart updated successfully!' : 'Chart saved successfully!');
       if (!id) navigate('/charts');
     },
@@ -448,7 +450,12 @@ const ChartBuilderPage: React.FC = () => {
       return;
     }
     if (!selectedDatasetId) return;
-    setIsSaveModalOpen(true);
+    
+    if (id && id !== 'builder') {
+      confirmSave(chartTitle, folderId);
+    } else {
+      setIsSaveModalOpen(true);
+    }
   };
 
   const confirmSave = (newTitle: string, newFolderId: number | null) => {
@@ -566,7 +573,7 @@ const ChartBuilderPage: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-all disabled:opacity-50"
           >
             {saveMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} 
-            Save Asset
+            {id && id !== 'builder' ? 'Update Chart' : 'Save Asset'}
           </button>
         </div>
       </div>

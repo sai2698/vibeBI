@@ -290,6 +290,10 @@ async def get_chart_data(
             
             cached_data = await get_cache(cache_key)
             if cached_data:
+                # Merge fresh chart metadata into cached data to avoid stale UI
+                cached_data["title"] = chart.title
+                cached_data["visual_config"] = chart.visual_config
+                cached_data["chart_type"] = chart.chart_type
                 return cached_data
 
     try:

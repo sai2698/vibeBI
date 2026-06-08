@@ -1522,7 +1522,7 @@ const DashboardViewPage: React.FC = () => {
                           </button>
                         )}
                         <button
-                          onClick={() => window.open(`/charts/${item.chart_id}/edit`, '_blank')}
+                          onClick={() => window.open(chartType === 'custom_template' ? `/charts/playground?id=${item.chart_id}` : `/charts/${item.chart_id}`, '_blank')}
                           title="Edit Source"
                           className="p-1.5 text-slate-400 hover:text-brand hover:bg-white rounded-lg transition-all"
                         >
