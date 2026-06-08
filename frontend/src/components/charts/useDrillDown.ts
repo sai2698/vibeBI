@@ -8,7 +8,7 @@ export interface DrillLevel {
   /** The filter column (the fromDimension column) */
   filterColumn: string;
   /** The value that was clicked to trigger drill */
-  filterValue: string;
+  filterValue: string | string[];
   /** Display label for breadcrumb */
   label: string;
 }
@@ -21,7 +21,7 @@ export interface DrillDownState {
   /** The current active dimension after all drills (null = use chart's original) */
   currentDimension: string | null;
   /** Computed filters from the full drill stack */
-  drillFilters: Record<string, string | string[]>;
+  drillFilters: Record<string, Array<string | string[]>>;
   /** Push a new drill level */
   drillDown: (fromDimension: string, toDimension: string, clickedValue: string) => void;
   /** Pop the last drill level */
@@ -34,10 +34,51 @@ export interface DrillDownState {
   filterByValue: (column: string, value: string | string[]) => void;
   /** Add an exclude filter */
   excludeValue: (column: string, value: string | string[]) => void;
+  /** Remove a specific value from a drill level (or the whole level if valueToRemove is empty/last) */
+  removeFilterValue: (levelIndex: number, valueToRemove?: string) => void;
+  /** Can navigate backward in history */
+  canGoBack: boolean;
+  /** Can navigate forward in history */
+  canGoForward: boolean;
+  /** Go back to previous drill state */
+  goBack: () => void;
+  /** Go forward to next drill state */
+  goForward: () => void;
 }
 
 export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: number }): DrillDownState {
-  const [drillStack, setDrillStack] = useState<DrillLevel[]>([]);
+  const [state, setState] = useState<{ history: DrillLevel[][]; index: number }>({
+    history: [[]],
+    index: 0,
+  });
+
+  const drillStack = state.history[state.index] || [];
+
+  const setDrillStack = useCallback((updater: React.SetStateAction<DrillLevel[]>) => {
+    setState((prevState) => {
+      const currentStack = prevState.history[prevState.index];
+      const newStack = typeof updater === 'function' ? updater(currentStack) : updater;
+
+      // If nothing changed, return same state
+      if (JSON.stringify(newStack) === JSON.stringify(currentStack)) return prevState;
+
+      const nextHistory = prevState.history.slice(0, Math.max(0, prevState.index) + 1);
+      nextHistory.push(newStack);
+      
+      let nextIndex = nextHistory.length - 1;
+
+      // Limit history to 50 items
+      if (nextHistory.length > 50) {
+         nextHistory.shift();
+         nextIndex--;
+      }
+
+      return {
+        history: nextHistory,
+        index: nextIndex
+      };
+    });
+  }, []);
 
   // Restore drill stack when an external action occurs (e.g. applying a saved view)
   useEffect(() => {
@@ -54,20 +95,13 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
   }, [drillStack]);
 
   const drillFilters = useMemo(() => {
-    const filters: Record<string, string | string[]> = {};
+    const filters: Record<string, Array<string | string[]>> = {};
     drillStack.forEach((level) => {
       if (level.filterValue && level.filterColumn) {
-        const existing = filters[level.filterColumn];
-        if (existing !== undefined) {
-          // If multiple filters apply to the same column, aggregate them into an array
-          if (Array.isArray(existing)) {
-            filters[level.filterColumn] = [...existing, ...(Array.isArray(level.filterValue) ? level.filterValue : [level.filterValue])];
-          } else {
-            filters[level.filterColumn] = [existing, ...(Array.isArray(level.filterValue) ? level.filterValue : [level.filterValue])];
-          }
-        } else {
-          filters[level.filterColumn] = level.filterValue;
+        if (!filters[level.filterColumn]) {
+          filters[level.filterColumn] = [];
         }
+        filters[level.filterColumn].push(level.filterValue);
       }
     });
     return filters;
@@ -86,20 +120,20 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
         },
       ]);
     },
-    [],
+    [setDrillStack],
   );
 
   const drillUp = useCallback(() => {
     setDrillStack((prev) => (prev.length > 0 ? prev.slice(0, -1) : prev));
-  }, []);
+  }, [setDrillStack]);
 
   const drillToLevel = useCallback((level: number) => {
     setDrillStack((prev) => prev.slice(0, level));
-  }, []);
+  }, [setDrillStack]);
 
   const resetDrill = useCallback(() => {
     setDrillStack([]);
-  }, []);
+  }, [setDrillStack]);
 
   const filterByValue = useCallback(
     (column: string, value: string | string[]) => {
@@ -115,7 +149,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
         },
       ]);
     },
-    [],
+    [setDrillStack],
   );
 
   const excludeValue = useCallback(
@@ -133,8 +167,53 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
         },
       ]);
     },
-    [],
+    [setDrillStack],
   );
+
+  const removeFilterValue = useCallback((levelIndex: number, valueToRemove?: string) => {
+    setDrillStack((prev) => {
+      const newStack = [...prev];
+      const level = newStack[levelIndex];
+      
+      if (!level) return prev;
+      
+      if (valueToRemove && Array.isArray(level.filterValue)) {
+        const newValues = level.filterValue.filter(v => v !== valueToRemove);
+        if (newValues.length > 0) {
+          const isExclude = newValues.every(v => typeof v === 'string' && v.startsWith('__EXCLUDE__'));
+          const labelValue = `${newValues.length} items`;
+          newStack[levelIndex] = {
+            ...level,
+            filterValue: newValues as any,
+            label: `${level.filterColumn} ${isExclude ? '≠' : '='} ${labelValue}`
+          };
+          return newStack;
+        }
+      }
+      
+      // If no valueToRemove provided or array becomes empty, remove the whole level
+      newStack.splice(levelIndex, 1);
+      
+      // Fix up the dimensions of the remaining levels
+      if (levelIndex < newStack.length) {
+        let currentDim = levelIndex > 0 ? newStack[levelIndex - 1].toDimension : newStack[0]?.fromDimension;
+        for (let i = levelIndex; i < newStack.length; i++) {
+          newStack[i].fromDimension = currentDim;
+          currentDim = newStack[i].toDimension;
+        }
+      }
+      
+      return newStack;
+    });
+  }, [setDrillStack]);
+
+  const goBack = useCallback(() => {
+    setState(prev => prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev);
+  }, []);
+
+  const goForward = useCallback(() => {
+    setState(prev => prev.index < prev.history.length - 1 ? { ...prev, index: prev.index + 1 } : prev);
+  }, []);
 
   return {
     drillStack,
@@ -147,5 +226,10 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
     resetDrill,
     filterByValue,
     excludeValue,
+    removeFilterValue,
+    canGoBack: state.index > 0,
+    canGoForward: state.index < state.history.length - 1,
+    goBack,
+    goForward,
   };
 }

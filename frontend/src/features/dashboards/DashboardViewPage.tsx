@@ -379,24 +379,45 @@ const DashboardViewPage: React.FC = () => {
 
     // Add drill filters from all widgets
     Object.values(chartsDrillFilters).forEach((widgetDrillFilters) => {
-      Object.entries(widgetDrillFilters).forEach(([col, val]) => {
-        if (val !== undefined && val !== null && val !== '') {
-          let isExclude = false;
-          let actualValue: any = val;
-          if (typeof val === 'string' && val.startsWith('__EXCLUDE__')) {
-            isExclude = true;
-            actualValue = val.substring(11);
-          } else if (Array.isArray(val)) {
-            if (val.length > 0 && typeof val[0] === 'string' && val[0].startsWith('__EXCLUDE__')) {
-               isExclude = true;
-               actualValue = val.map(v => typeof v === 'string' ? v.replace(/^__EXCLUDE__/, '') : v);
+      Object.entries(widgetDrillFilters).forEach(([col, filterLevels]) => {
+        if (filterLevels !== undefined && filterLevels !== null && filterLevels !== '') {
+          const levels = Array.isArray(filterLevels) ? filterLevels : [filterLevels];
+          
+          levels.forEach(levelValue => {
+            if (Array.isArray(levelValue)) {
+              const inValues = levelValue.filter(v => typeof v !== 'string' || !v.startsWith('__EXCLUDE__'));
+              const excludeValues = levelValue.filter(v => typeof v === 'string' && v.startsWith('__EXCLUDE__')).map(v => v.replace(/^__EXCLUDE__/, ''));
+              
+              if (inValues.length > 0) {
+                children.push({
+                  type: 'rule',
+                  column_name: col,
+                  operator: inValues.length > 1 ? 'IN' : 'EQUALS',
+                  value: inValues.length > 1 ? inValues : inValues[0]
+                });
+              }
+              if (excludeValues.length > 0) {
+                children.push({
+                  type: 'rule',
+                  column_name: col,
+                  operator: excludeValues.length > 1 ? 'NOT_IN' : 'NOT_EQUALS',
+                  value: excludeValues.length > 1 ? excludeValues : excludeValues[0]
+                });
+              }
+            } else {
+              let isExclude = false;
+              let actualValue: any = levelValue;
+              if (typeof levelValue === 'string' && levelValue.startsWith('__EXCLUDE__')) {
+                isExclude = true;
+                actualValue = levelValue.substring(11);
+              }
+              children.push({
+                type: 'rule',
+                column_name: col,
+                operator: isExclude ? 'NOT_EQUALS' : 'EQUALS',
+                value: actualValue
+              });
             }
-          }
-          children.push({
-            type: 'rule',
-            column_name: col,
-            operator: isExclude ? (Array.isArray(actualValue) ? 'NOT_IN' : 'NOT_EQUALS') : (Array.isArray(actualValue) ? 'IN' : 'EQUALS'),
-            value: actualValue
           });
         }
       });

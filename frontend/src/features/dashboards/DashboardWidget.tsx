@@ -156,25 +156,47 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
     }
 
     // 3. Add drill-down filters
-    Object.entries(drill.drillFilters).forEach(([key, value]) => {
-      let isExclude = false;
-      let actualValue: any = value;
+    Object.entries(drill.drillFilters).forEach(([key, filterLevels]) => {
+      // filterLevels is an array of filters applied at different drill steps
+      const levels = Array.isArray(filterLevels) ? filterLevels : [filterLevels];
       
-      if (typeof value === 'string' && value.startsWith('__EXCLUDE__')) {
-        isExclude = true;
-        actualValue = value.substring(11);
-      } else if (Array.isArray(value)) {
-        if (value.length > 0 && typeof value[0] === 'string' && value[0].startsWith('__EXCLUDE__')) {
-           isExclude = true;
-           actualValue = value.map(v => typeof v === 'string' ? v.replace(/^__EXCLUDE__/, '') : v);
-        }
-      }
+      levels.forEach(levelValue => {
+        if (Array.isArray(levelValue)) {
+          const inValues = levelValue.filter(v => typeof v !== 'string' || !v.startsWith('__EXCLUDE__'));
+          const excludeValues = levelValue.filter(v => typeof v === 'string' && v.startsWith('__EXCLUDE__')).map(v => v.replace(/^__EXCLUDE__/, ''));
+          
+          if (inValues.length > 0) {
+            children.push({
+              type: 'rule',
+              column_name: key,
+              operator: inValues.length > 1 ? 'IN' : 'EQUALS',
+              value: inValues.length > 1 ? inValues : inValues[0]
+            });
+          }
+          if (excludeValues.length > 0) {
+            children.push({
+              type: 'rule',
+              column_name: key,
+              operator: excludeValues.length > 1 ? 'NOT_IN' : 'NOT_EQUALS',
+              value: excludeValues.length > 1 ? excludeValues : excludeValues[0]
+            });
+          }
+        } else {
+          let isExclude = false;
+          let actualValue: any = levelValue;
+          
+          if (typeof levelValue === 'string' && levelValue.startsWith('__EXCLUDE__')) {
+            isExclude = true;
+            actualValue = levelValue.substring(11);
+          }
 
-      children.push({
-        type: 'rule',
-        column_name: key,
-        operator: isExclude ? (Array.isArray(actualValue) ? 'NOT_IN' : 'NOT_EQUALS') : (Array.isArray(actualValue) ? 'IN' : 'EQUALS'),
-        value: actualValue
+          children.push({
+            type: 'rule',
+            column_name: key,
+            operator: isExclude ? 'NOT_EQUALS' : 'EQUALS',
+            value: actualValue
+          });
+        }
       });
     });
 
@@ -389,6 +411,11 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
             originalDimensionLabel={activeDimensionName || 'All'}
             onDrillToLevel={drill.drillToLevel}
             onResetDrill={drill.resetDrill}
+            onRemoveFilterValue={drill.removeFilterValue}
+            canGoBack={drill.canGoBack}
+            canGoForward={drill.canGoForward}
+            onGoBack={drill.goBack}
+            onGoForward={drill.goForward}
           />
         </div>,
         portalTarget
