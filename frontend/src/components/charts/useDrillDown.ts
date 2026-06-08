@@ -36,49 +36,10 @@ export interface DrillDownState {
   excludeValue: (column: string, value: string | string[]) => void;
   /** Remove a specific value from a drill level (or the whole level if valueToRemove is empty/last) */
   removeFilterValue: (levelIndex: number, valueToRemove?: string) => void;
-  /** Can navigate backward in history */
-  canGoBack: boolean;
-  /** Can navigate forward in history */
-  canGoForward: boolean;
-  /** Go back to previous drill state */
-  goBack: () => void;
-  /** Go forward to next drill state */
-  goForward: () => void;
 }
 
 export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: number }): DrillDownState {
-  const [state, setState] = useState<{ history: DrillLevel[][]; index: number }>({
-    history: [[]],
-    index: 0,
-  });
-
-  const drillStack = state.history[state.index] || [];
-
-  const setDrillStack = useCallback((updater: React.SetStateAction<DrillLevel[]>) => {
-    setState((prevState) => {
-      const currentStack = prevState.history[prevState.index];
-      const newStack = typeof updater === 'function' ? updater(currentStack) : updater;
-
-      // If nothing changed, return same state
-      if (JSON.stringify(newStack) === JSON.stringify(currentStack)) return prevState;
-
-      const nextHistory = prevState.history.slice(0, Math.max(0, prevState.index) + 1);
-      nextHistory.push(newStack);
-      
-      let nextIndex = nextHistory.length - 1;
-
-      // Limit history to 50 items
-      if (nextHistory.length > 50) {
-         nextHistory.shift();
-         nextIndex--;
-      }
-
-      return {
-        history: nextHistory,
-        index: nextIndex
-      };
-    });
-  }, []);
+  const [drillStack, setDrillStack] = useState<DrillLevel[]>([]);
 
   // Restore drill stack when an external action occurs (e.g. applying a saved view)
   useEffect(() => {
@@ -120,20 +81,20 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
         },
       ]);
     },
-    [setDrillStack],
+    [],
   );
 
   const drillUp = useCallback(() => {
     setDrillStack((prev) => (prev.length > 0 ? prev.slice(0, -1) : prev));
-  }, [setDrillStack]);
+  }, []);
 
   const drillToLevel = useCallback((level: number) => {
     setDrillStack((prev) => prev.slice(0, level));
-  }, [setDrillStack]);
+  }, []);
 
   const resetDrill = useCallback(() => {
     setDrillStack([]);
-  }, [setDrillStack]);
+  }, []);
 
   const filterByValue = useCallback(
     (column: string, value: string | string[]) => {
@@ -149,7 +110,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
         },
       ]);
     },
-    [setDrillStack],
+    [],
   );
 
   const excludeValue = useCallback(
@@ -167,7 +128,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
         },
       ]);
     },
-    [setDrillStack],
+    [],
   );
 
   const removeFilterValue = useCallback((levelIndex: number, valueToRemove?: string) => {
@@ -205,14 +166,6 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
       
       return newStack;
     });
-  }, [setDrillStack]);
-
-  const goBack = useCallback(() => {
-    setState(prev => prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev);
-  }, []);
-
-  const goForward = useCallback(() => {
-    setState(prev => prev.index < prev.history.length - 1 ? { ...prev, index: prev.index + 1 } : prev);
   }, []);
 
   return {
@@ -227,9 +180,5 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
     filterByValue,
     excludeValue,
     removeFilterValue,
-    canGoBack: state.index > 0,
-    canGoForward: state.index < state.history.length - 1,
-    goBack,
-    goForward,
   };
 }

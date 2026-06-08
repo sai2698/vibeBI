@@ -8,10 +8,6 @@ interface DrillBreadcrumbsProps {
   onDrillToLevel: (level: number) => void;
   onResetDrill: () => void;
   onRemoveFilterValue?: (levelIndex: number, valueToRemove?: string) => void;
-  canGoBack?: boolean;
-  canGoForward?: boolean;
-  onGoBack?: () => void;
-  onGoForward?: () => void;
 }
 
 const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
@@ -20,10 +16,6 @@ const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
   onDrillToLevel,
   onResetDrill,
   onRemoveFilterValue,
-  canGoBack,
-  canGoForward,
-  onGoBack,
-  onGoForward,
 }) => {
   const [openDropdownIdx, setOpenDropdownIdx] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -40,31 +32,10 @@ const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openDropdownIdx]);
 
-  if (drillStack.length === 0 && !canGoForward && !canGoBack) return null;
+  if (drillStack.length === 0) return null;
 
   return (
     <div className="flex items-center gap-2 relative">
-      {/* Navigation Buttons */}
-      {(canGoBack || canGoForward) && (
-        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm h-9">
-          <button
-            onClick={onGoBack}
-            disabled={!canGoBack}
-            className={`p-1.5 rounded-md transition-colors ${canGoBack ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'}`}
-            title="Go back"
-          >
-            <ChevronLeft size={14} />
-          </button>
-          <button
-            onClick={onGoForward}
-            disabled={!canGoForward}
-            className={`p-1.5 rounded-md transition-colors ${canGoForward ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'}`}
-            title="Go forward"
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
 
       {/* Pill and Reset */}
       {drillStack.length > 0 && (

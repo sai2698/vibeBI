@@ -412,10 +412,6 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
             onDrillToLevel={drill.drillToLevel}
             onResetDrill={drill.resetDrill}
             onRemoveFilterValue={drill.removeFilterValue}
-            canGoBack={drill.canGoBack}
-            canGoForward={drill.canGoForward}
-            onGoBack={drill.goBack}
-            onGoForward={drill.goForward}
           />
         </div>,
         portalTarget

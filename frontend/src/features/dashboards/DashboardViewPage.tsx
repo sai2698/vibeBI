@@ -16,7 +16,7 @@ import {
   Filter, Settings, FilterX,
   BarChart3, PieChart, LineChart, TrendingUp, Table as TableIcon, Trash2,
   Bookmark, Info, MoreHorizontal, Clock, ExternalLink,
-  ChevronDown, Check, Sparkles, Palette
+  ChevronDown, Undo2, Redo2, Check, Sparkles, Palette
 } from 'lucide-react';
 import DeleteConfirmationModal from '../../components/ui/DeleteConfirmationModal';
 import DashboardAIChat from './DashboardAIChat';
@@ -337,6 +337,82 @@ const DashboardViewPage: React.FC = () => {
   const [chartsDrillStacks, setChartsDrillStacks] = useState<Record<number, any[]>>({});
   // Signal to widgets to restore drill stacks
   const [restoreDrillAction, setRestoreDrillAction] = useState<{ stacks: Record<number, any[]>; timestamp: number } | null>(null);
+
+  // Global History Tracking
+  const [historyState, setHistoryState] = useState<{
+    history: { globalFilters: Record<string, any>; chartsDrillStacks: Record<number, any[]> }[];
+    index: number;
+  }>({
+    history: [{ globalFilters: {}, chartsDrillStacks: {} }],
+    index: 0,
+  });
+  const isRestoringHistory = useRef(false);
+
+  // Global History Effect
+  useEffect(() => {
+    if (isRestoringHistory.current) {
+      // If we are currently restoring from history, we skip recording this change
+      // and reset the flag for future user interactions
+      const timer = setTimeout(() => { isRestoringHistory.current = false; }, 200);
+      return () => clearTimeout(timer);
+    }
+    
+    setHistoryState(prev => {
+      const currentSnapshot = prev.history[prev.index];
+      const newSnapshot = { globalFilters, chartsDrillStacks };
+      
+      // Deep equality check to prevent duplicate snapshots
+      if (JSON.stringify(currentSnapshot) === JSON.stringify(newSnapshot)) return prev;
+
+      const nextHistory = prev.history.slice(0, prev.index + 1);
+      nextHistory.push(newSnapshot);
+      let nextIndex = nextHistory.length - 1;
+      
+      // Limit to 50 items
+      if (nextHistory.length > 50) {
+        nextHistory.shift();
+        nextIndex--;
+      }
+      return { history: nextHistory, index: nextIndex };
+    });
+  }, [globalFilters, chartsDrillStacks]);
+
+  const handleGlobalGoBack = useCallback(() => {
+    setHistoryState(prev => {
+      if (prev.index > 0) {
+        const nextIndex = prev.index - 1;
+        const snapshot = prev.history[nextIndex];
+        
+        isRestoringHistory.current = true;
+        setGlobalFilters(snapshot.globalFilters);
+        setStagedFilters(snapshot.globalFilters); // Also stage them so the filter bar shows correct state
+        setRestoreDrillAction({ stacks: snapshot.chartsDrillStacks, timestamp: Date.now() });
+        
+        return { ...prev, index: nextIndex };
+      }
+      return prev;
+    });
+  }, []);
+
+  const handleGlobalGoForward = useCallback(() => {
+    setHistoryState(prev => {
+      if (prev.index < prev.history.length - 1) {
+        const nextIndex = prev.index + 1;
+        const snapshot = prev.history[nextIndex];
+        
+        isRestoringHistory.current = true;
+        setGlobalFilters(snapshot.globalFilters);
+        setStagedFilters(snapshot.globalFilters);
+        setRestoreDrillAction({ stacks: snapshot.chartsDrillStacks, timestamp: Date.now() });
+        
+        return { ...prev, index: nextIndex };
+      }
+      return prev;
+    });
+  }, []);
+
+  const canGoBack = historyState.index > 0;
+  const canGoForward = historyState.index < historyState.history.length - 1;
 
   const handleWidgetDrillFiltersChange = useCallback((chartId: number, drillFilters: Record<string, string | string[]>, drillStack?: any[]) => {
     setChartsDrillFilters(prev => {
@@ -907,6 +983,27 @@ const DashboardViewPage: React.FC = () => {
               {/* Utility Icons */}
               {!isMobile && (
                 <>
+                  {/* Global History Navigation */}
+                  <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-md p-0.5 shadow-sm mr-1">
+                    <button
+                      onClick={handleGlobalGoBack}
+                      disabled={!canGoBack}
+                      className={`p-1 rounded transition-colors ${canGoBack ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'}`}
+                      title="Undo Action (Go Back)"
+                    >
+                      <Undo2 size={15} />
+                    </button>
+                    <div className="w-px h-3.5 bg-slate-200 mx-0.5" />
+                    <button
+                      onClick={handleGlobalGoForward}
+                      disabled={!canGoForward}
+                      className={`p-1 rounded transition-colors ${canGoForward ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'}`}
+                      title="Redo Action (Go Forward)"
+                    >
+                      <Redo2 size={15} />
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => setIsFilterBarOpen(!isFilterBarOpen)}
                     className={`${headerIconClass} ${isFilterBarOpen ? 'bg-black/5 dark:bg-white/10 !opacity-100' : ''}`}
