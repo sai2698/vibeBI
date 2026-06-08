@@ -1,9 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import * as echarts from 'echarts';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, ChevronRight, ArrowUpDown, Layers, X, Filter, Table, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { createChartConfigSchema, type ChartConfigSchema, getConfigValue } from './config-schema';
-import { ChevronDown, ArrowUpDown, ChevronRight } from 'lucide-react';
-
-type EChartsOption = echarts.EChartsOption;
 
 export interface PivotTableChartProps {
   categories?: string[];
@@ -21,6 +19,15 @@ export interface PivotTableChartProps {
       defaultCollapsed?: boolean;
       highlightCells?: boolean;
       colorScale?: boolean;
+      totalPosition?: 'top' | 'bottom';
+      showRowGrandTotal?: boolean;
+      showColumnGrandTotal?: boolean;
+      showColumnSubTotals?: boolean;
+      density?: 'compact' | 'comfortable' | 'spacious';
+      showMiniBar?: boolean;
+      stickyRowHeaders?: boolean;
+      numberFormat?: 'auto' | 'number' | 'currency' | 'percent';
+      decimalPlaces?: number;
     };
     dataLabels?: {
       fontSize?: number;
@@ -40,8 +47,11 @@ export interface PivotTableChartProps {
     secondary?: string;
     colors?: string[];
   };
-  /** Called when user right-clicks a dimension cell */
-  onDrillContextMenu?: (e: React.MouseEvent, cellValue: string, colName: string) => void;
+  onDrillDown?: (fromDimension: string, toDimension: string, clickedValue: string | string[]) => void;
+  onFilterByValue?: (column: string, value: string | string[]) => void;
+  onExcludeValue?: (column: string, value: string | string[]) => void;
+  availableColumns?: string[];
+  currentDimensionName?: string;
 }
 
 export const pivotTableChartConfigSchema: ChartConfigSchema = createChartConfigSchema({
@@ -68,6 +78,24 @@ export const pivotTableChartConfigSchema: ChartConfigSchema = createChartConfigS
           description: 'Display subtotals for groups',
         },
         {
+          key: 'pivot.totalPosition',
+          label: 'Totals Position',
+          type: 'select',
+          options: [
+            { label: 'Bottom', value: 'bottom' },
+            { label: 'Top', value: 'top' },
+          ],
+          defaultValue: 'bottom',
+          description: 'Show Totals at the top or bottom of the table',
+        },
+        {
+          key: 'pivot.showColumnSubTotals',
+          label: 'Show Column Subtotals',
+          type: 'boolean',
+          defaultValue: true,
+          description: 'Display subtotals for column dimension groups',
+        },
+        {
           key: 'pivot.collapsibleGroups',
           label: 'Collapsible Groups',
           type: 'boolean',
@@ -82,18 +110,57 @@ export const pivotTableChartConfigSchema: ChartConfigSchema = createChartConfigS
           description: 'Start with groups collapsed',
         },
         {
-          key: 'pivot.highlightCells',
-          label: 'Highlight Cells',
+          key: 'pivot.density',
+          label: 'Row Density',
+          type: 'select',
+          options: [
+            { label: 'Compact', value: 'compact' },
+            { label: 'Comfortable', value: 'comfortable' },
+            { label: 'Spacious', value: 'spacious' },
+          ],
+          defaultValue: 'comfortable',
+          description: 'Row spacing density',
+        },
+        {
+          key: 'pivot.showMiniBar',
+          label: 'Inline Mini-Bars',
+          type: 'boolean',
+          defaultValue: false,
+          description: 'Show visual mini-bars in metric cells',
+        },
+        {
+          key: 'pivot.stickyRowHeaders',
+          label: 'Sticky Row Headers',
           type: 'boolean',
           defaultValue: true,
-          description: 'Highlight cell values',
+          description: 'Keep row dimension columns locked during horizontal scrolling',
         },
         {
           key: 'pivot.colorScale',
-          label: 'Color Scale',
+          label: 'Color Scale Heatmap',
           type: 'boolean',
           defaultValue: false,
           description: 'Apply heatmap color scale to values',
+        },
+        {
+          key: 'pivot.numberFormat',
+          label: 'Number Format',
+          type: 'select',
+          options: [
+            { label: 'Auto', value: 'auto' },
+            { label: 'Number', value: 'number' },
+            { label: 'Currency ($)', value: 'currency' },
+            { label: 'Percentage (%)', value: 'percent' },
+          ],
+          defaultValue: 'auto',
+          description: 'Formatting format for numeric cells',
+        },
+        {
+          key: 'pivot.decimalPlaces',
+          label: 'Decimal Places',
+          type: 'number',
+          defaultValue: 2,
+          description: 'Number of decimal places to show',
         },
       ],
     },
@@ -107,7 +174,7 @@ export const pivotTableChartConfigSchema: ChartConfigSchema = createChartConfigS
           key: 'dataLabels.fontSize',
           label: 'Font Size',
           type: 'number',
-          defaultValue: 13,
+          defaultValue: 12,
           description: 'Cell font size',
         },
         {
@@ -121,7 +188,7 @@ export const pivotTableChartConfigSchema: ChartConfigSchema = createChartConfigS
           key: 'dataLabels.headerBackgroundColor',
           label: 'Header Background',
           type: 'color',
-          defaultValue: '#f1f5f9',
+          defaultValue: '#f8fafc',
           description: 'Header background color',
         },
         {
@@ -161,13 +228,33 @@ export const pivotTableChartConfigSchema: ChartConfigSchema = createChartConfigS
     },
   ],
   defaultConfig: {
-    pivot: { showGrandTotal: true, showSubTotals: true, collapsibleGroups: true, defaultCollapsed: false, highlightCells: true, colorScale: false },
-    dataLabels: { fontSize: 13, fontFamily: 'Arial, sans-serif', headerBackgroundColor: '#f1f5f9', headerColor: '#1e293b', rowColor: '#ffffff', borderColor: '#e2e8f0', totalFontWeight: 'bolder' },
+    pivot: {
+      showGrandTotal: true,
+      showSubTotals: true,
+      totalPosition: 'bottom',
+      showColumnSubTotals: true,
+      collapsibleGroups: true,
+      defaultCollapsed: false,
+      density: 'comfortable',
+      showMiniBar: false,
+      stickyRowHeaders: true,
+      colorScale: false,
+      numberFormat: 'auto',
+      decimalPlaces: 2,
+    },
+    dataLabels: {
+      fontSize: 12,
+      fontFamily: 'Arial, sans-serif',
+      headerBackgroundColor: '#f8fafc',
+      headerColor: '#1e293b',
+      rowColor: '#ffffff',
+      borderColor: '#e2e8f0',
+      totalFontWeight: 'bolder',
+    },
   },
 });
 
-export function buildPivotTableChartOptions(_props: PivotTableChartProps): EChartsOption {
-  // This function is kept for compatibility but PivotTable is rendered as React component
+export function buildPivotTableChartOptions(_props: PivotTableChartProps): any {
   return { series: [] };
 }
 
@@ -178,36 +265,172 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
   pivotData,
   visualConfig = {},
   themeMeta,
-  onDrillContextMenu,
+  onDrillDown,
+  onFilterByValue,
+  onExcludeValue,
+  availableColumns = [],
+  currentDimensionName = '',
 }) => {
   const cfg = visualConfig;
   const showGrandTotal = getConfigValue(cfg, 'pivot.showGrandTotal') ?? true;
   const showSubTotals = getConfigValue(cfg, 'pivot.showSubTotals') ?? true;
   const collapsibleGroups = getConfigValue(cfg, 'pivot.collapsibleGroups') ?? true;
+  const defaultCollapsed = getConfigValue(cfg, 'pivot.defaultCollapsed') ?? false;
   const colorScale = getConfigValue(cfg, 'pivot.colorScale') ?? false;
-  const highlightCells = getConfigValue(cfg, 'pivot.highlightCells') ?? true;
-  const fontSize = getConfigValue(cfg, 'dataLabels.fontSize') ?? 13;
+  const fontSize = getConfigValue(cfg, 'dataLabels.fontSize') ?? 12;
   const borderColor = getConfigValue(cfg, 'dataLabels.borderColor') ?? '#e2e8f0';
   const totalFontWeight = getConfigValue(cfg, 'dataLabels.totalFontWeight') ?? 'bolder';
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Enterprise additions
+  const totalPosition = getConfigValue(cfg, 'pivot.totalPosition') ?? 'bottom';
+  const showRowGrandTotal = getConfigValue(cfg, 'pivot.showRowGrandTotal') ?? showGrandTotal;
+  const showColumnGrandTotal = getConfigValue(cfg, 'pivot.showColumnGrandTotal') ?? showGrandTotal;
+  const showColumnSubTotals = getConfigValue(cfg, 'pivot.showColumnSubTotals') ?? showSubTotals;
+  const density = getConfigValue(cfg, 'pivot.density') ?? 'comfortable';
+  const showMiniBar = getConfigValue(cfg, 'pivot.showMiniBar') ?? false;
+  const stickyRowHeaders = getConfigValue(cfg, 'pivot.stickyRowHeaders') ?? true;
+  const numberFormat = getConfigValue(cfg, 'pivot.numberFormat') ?? 'auto';
+  const decimalPlaces = getConfigValue(cfg, 'pivot.decimalPlaces') ?? 2;
 
-  const toggleGroup = (key: string) => {
-    if (!collapsibleGroups) return;
-    setCollapsedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
+  // States
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedColGroups, setCollapsedColGroups] = useState<Set<string>>(new Set());
+  const [selectedCells, setSelectedCells] = useState<Map<string, Set<string>>>(new Map());
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    dimName?: string;
+    value?: string;
+  } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isScrolledX, setIsScrolledX] = useState(false);
+  const [hoveredColKey, setHoveredColKey] = useState<string | null>(null);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleCloseMenu = () => setContextMenu(null);
+    document.addEventListener('click', handleCloseMenu);
+    document.addEventListener('contextmenu', handleCloseMenu);
+    return () => {
+      document.removeEventListener('click', handleCloseMenu);
+      document.removeEventListener('contextmenu', handleCloseMenu);
+    };
+  }, []);
+
+  // Selection bar Drill Down states and refs
+  const [showDrillDropdown, setShowDrillDropdown] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
+        setShowDrillDropdown(false);
       }
-      return next;
-    });
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Update dropdown position when opened
+  useEffect(() => {
+    if (showDrillDropdown && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  }, [showDrillDropdown]);
+
+  // Monitor horizontal scroll to add shadow to sticky columns
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setIsScrolledX(e.currentTarget.scrollLeft > 2);
   };
 
+  // Initialize default collapsed state
+  useEffect(() => {
+    if (defaultCollapsed && pivotData) {
+      const allRowKeys = new Set<string>();
+      const collectKeys = (node: any) => {
+        if (node.children && node.children.size > 0 && node.key) {
+          allRowKeys.add(node.key);
+          node.children.forEach((child: any) => collectKeys(child));
+        }
+      };
+      // Gather keys of non-leaves
+      pivotData.uniqueRowKeys.forEach((rKey: string) => {
+        const path = rKey.split('|||');
+        if (path.length > 1) {
+          for (let i = 1; i < path.length; i++) {
+            allRowKeys.add(path.slice(0, i).join('|||'));
+          }
+        }
+      });
+      setCollapsedGroups(allRowKeys);
+    }
+  }, [defaultCollapsed, pivotData]);
+
+  // Aggregate helpers
+  const getMetricAggType = (metricName: string) => {
+    if (!pivotData?.rawMetrics) return 'sum';
+    const metricObj = pivotData.rawMetrics.find((m: any) =>
+      (typeof m === 'string' && m === metricName) ||
+      (typeof m === 'object' && (m.alias === metricName || m.name === metricName))
+    );
+    return (metricObj?.agg || 'sum').toLowerCase();
+  };
+
+  const aggregateValues = (values: number[], metricName: string) => {
+    const agg = getMetricAggType(metricName);
+    if (values.length === 0) return null;
+    if (agg === 'avg') {
+      return values.reduce((s, v) => s + v, 0) / values.length;
+    }
+    if (agg === 'min') {
+      return Math.min(...values);
+    }
+    if (agg === 'max') {
+      return Math.max(...values);
+    }
+    if (agg === 'count') {
+      return values.length;
+    }
+    return values.reduce((s, v) => s + v, 0); // fallback sum
+  };
+
+  // Format Helper
+  const formatValue = (val: any) => {
+    if (val === null || val === undefined) return '-';
+    if (typeof val !== 'number') return String(val);
+
+    const formatted = val.toLocaleString(undefined, {
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
+    });
+
+    if (numberFormat === 'currency') {
+      return `$${formatted}`;
+    }
+    if (numberFormat === 'percent') {
+      return `${(val * 100).toLocaleString(undefined, {
+        minimumFractionDigits: decimalPlaces,
+        maximumFractionDigits: decimalPlaces,
+      })}%`;
+    }
+    return formatted;
+  };
+
+  // Build row & column structures
   const { rowTree, leafColumns, rowDimNames, colDimNames, measureNames } = useMemo(() => {
     if (pivotData) {
-      // Build row tree from pivotData
       const tree = { children: new Map() };
       
       pivotData.uniqueRowKeys.forEach((rKey: string) => {
@@ -239,30 +462,15 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
           pivotData.leafColumns.forEach((lc: any) => {
             const childValues = Array.from(node.children.values())
               .map((child: any) => child.aggregations[lc.key])
-              .filter(v => v !== null && v !== undefined);
+              .filter(v => v !== null && v !== undefined) as number[];
             
-            if (childValues.length === 0) {
-              node.aggregations[lc.key] = null;
-            } else {
-              const metricObj = pivotData.rawMetrics?.find((m: any) => 
-                (typeof m === 'string' && m === lc.metricName) || 
-                (typeof m === 'object' && (m.alias === lc.metricName || m.name === lc.metricName))
-              );
-              const aggType = (metricObj?.agg || 'sum').toLowerCase();
-              
-              if (aggType === 'avg') {
-                const sum = childValues.reduce((s: number, v: any) => s + Number(v), 0);
-                node.aggregations[lc.key] = sum / childValues.length;
-              } else if (aggType === 'min') {
-                node.aggregations[lc.key] = Math.min(...childValues.map(v => Number(v)));
-              } else if (aggType === 'max') {
-                node.aggregations[lc.key] = Math.max(...childValues.map(v => Number(v)));
-              } else {
-                node.aggregations[lc.key] = childValues.reduce((s: number, v: any) => s + Number(v), 0);
-              }
-            }
+            node.aggregations[lc.key] = aggregateNodeValues(childValues, lc.metricName);
           });
         }
+      };
+
+      const aggregateNodeValues = (values: number[], metricName: string) => {
+        return aggregateValues(values, metricName);
       };
 
       tree.children.forEach(child => aggregateNode(child));
@@ -276,7 +484,7 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
       };
     }
 
-    // Fallback block
+    // Fallback block if pivotData is empty
     const fallbackRowDimNames = dimensions?.map(d => d.name) || (categories ? ['Dimension'] : ['Index']);
     const fallbackMeasureNames = series.map(s => s.name);
     const fallbackLeafColumns = series.map(s => ({ key: s.name, colValues: [], metricName: s.name }));
@@ -321,8 +529,8 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
         fallbackLeafColumns.forEach(lc => {
           const childValues = Array.from(node.children.values())
             .map((child: any) => child.aggregations[lc.key])
-            .filter(v => v !== null && v !== undefined);
-          node.aggregations[lc.key] = childValues.length === 0 ? null : childValues.reduce((s: number, v: any) => s + Number(v), 0);
+            .filter(v => v !== null && v !== undefined) as number[];
+          node.aggregations[lc.key] = childValues.length === 0 ? null : childValues.reduce((s, v) => s + Number(v), 0);
         });
       }
     };
@@ -337,6 +545,7 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
     };
   }, [pivotData, dimensions, categories, series]);
 
+  // Generate flatRows list
   const flatRows = useMemo(() => {
     if (!rowTree) return [];
 
@@ -391,58 +600,165 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
     return generateRows(rowTree);
   }, [rowTree, collapsedGroups, showSubTotals]);
 
-  const displayLeafColumns = useMemo(() => {
-    const cols = [...leafColumns];
-    if (showGrandTotal && colDimNames.length > 0) {
+  const filteredFlatRows = flatRows;
+
+  // Column Hierarchy Tree
+  const colTree = useMemo(() => {
+    const root = { children: new Map(), leafCols: [] as any[] };
+    leafColumns.forEach(lc => {
+      let current: any = root;
+      current.leafCols.push(lc);
+      lc.colValues.forEach((val: string, level: number) => {
+        if (!current.children.has(val)) {
+          current.children.set(val, {
+            key: lc.colValues.slice(0, level + 1).join('|||'),
+            value: val,
+            level,
+            children: new Map(),
+            leafCols: []
+          });
+        }
+        current = current.children.get(val);
+        current.leafCols.push(lc);
+      });
+    });
+    return root;
+  }, [leafColumns]);
+
+  // Dynamic visibleColumns generation (supporting Column Collapsing and Subtotals)
+  interface PivotColumn {
+    key: string;
+    colValues: string[];
+    metricName: string;
+    isSubtotal?: boolean;
+    subtotalPath?: string[];
+    isGrandTotal?: boolean;
+    leafCols: any[];
+  }
+
+  const visibleColumns = useMemo(() => {
+    const generateVisibleCols = (node: any): PivotColumn[] => {
+      const cols: PivotColumn[] = [];
+      
+      if (node.key && collapsedColGroups.has(node.key)) {
+        const metricsUnderNode = Array.from(new Set(node.leafCols.map((c: any) => c.metricName))) as string[];
+        metricsUnderNode.forEach((m: string) => {
+          cols.push({
+            key: `col-subtotal|||${node.key}|||${m}`,
+            colValues: [...node.leafCols[0].colValues.slice(0, node.level + 1), 'Subtotal'],
+            metricName: m,
+            isSubtotal: true,
+            subtotalPath: node.leafCols[0].colValues.slice(0, node.level + 1),
+            leafCols: node.leafCols.filter((c: any) => c.metricName === m)
+          });
+        });
+        return cols;
+      }
+      
+      if (node.children.size === 0) {
+        node.leafCols.forEach((lc: any) => {
+          cols.push({
+            key: lc.key,
+            colValues: lc.colValues,
+            metricName: lc.metricName,
+            leafCols: [lc]
+          });
+        });
+      } else {
+        const sortedChildren = Array.from(node.children.values()).sort((a: any, b: any) =>
+          String(a.value).localeCompare(String(b.value), undefined, { numeric: true, sensitivity: 'base' })
+        );
+        sortedChildren.forEach(child => {
+          cols.push(...generateVisibleCols(child));
+        });
+        
+        if (showColumnSubTotals && node.key) {
+          const metricsUnderNode = Array.from(new Set(node.leafCols.map((c: any) => c.metricName))) as string[];
+          metricsUnderNode.forEach((m: string) => {
+            cols.push({
+              key: `col-subtotal|||${node.key}|||subtotal|||${m}`,
+              colValues: [...node.leafCols[0].colValues.slice(0, node.level + 1), 'Total'],
+              metricName: m,
+              isSubtotal: true,
+              subtotalPath: node.leafCols[0].colValues.slice(0, node.level + 1),
+              leafCols: node.leafCols.filter((c: any) => c.metricName === m)
+            });
+          });
+        }
+      }
+      return cols;
+    };
+
+    const cols = generateVisibleCols(colTree);
+
+    // Append Column Grand Totals
+    if (showColumnGrandTotal && colDimNames.length > 0) {
       measureNames.forEach(m => {
         cols.push({
-          key: `row-total|||${m}`,
-          colValues: ['Row totals'],
-          metricName: m
+          key: `row-grand-total|||${m}`,
+          colValues: ['Grand Total'],
+          metricName: m,
+          isGrandTotal: true,
+          leafCols: leafColumns.filter(lc => lc.metricName === m)
         });
       });
     }
-    return cols;
-  }, [leafColumns, showGrandTotal, colDimNames, measureNames]);
 
-  const getCellValue = (row: any, leafCol: any) => {
-    if (leafCol.key.startsWith('row-total|||')) {
-      const values = leafColumns
-        .filter(lc => lc.metricName === leafCol.metricName)
-        .map(lc => row.values[lc.key])
-        .filter(v => v !== null && v !== undefined);
-      if (values.length === 0) return null;
-      return values.reduce((s, v) => s + Number(v), 0);
+    return cols;
+  }, [colTree, collapsedColGroups, showColumnSubTotals, showColumnGrandTotal, colDimNames, measureNames, leafColumns]);
+
+  // Cell values extractor
+  const getCellValue = (row: any, col: PivotColumn) => {
+    if (col.isGrandTotal || col.isSubtotal) {
+      const values = col.leafCols
+        .map((lc: any) => row.values[lc.key])
+        .filter(v => v !== null && v !== undefined) as number[];
+      return aggregateValues(values, col.metricName);
     }
-    return row.values[leafCol.key] ?? null;
+    return row.values[col.key] ?? null;
   };
 
+  // Grand totals of columns (bottom/top row grand totals)
   const columnGrandTotals = useMemo(() => {
     const totals: Record<string, number | null> = {};
-    displayLeafColumns.forEach(lc => {
+    visibleColumns.forEach(col => {
       const leafRowValues = flatRows
         .filter(r => r.type === 'leaf')
-        .map(r => getCellValue(r, lc))
-        .filter(v => v !== null && v !== undefined);
-      totals[lc.key] = leafRowValues.length === 0 ? null : leafRowValues.reduce((s, v) => s + Number(v), 0);
+        .map(r => getCellValue(r, col))
+        .filter(v => v !== null && v !== undefined) as number[];
+      totals[col.key] = aggregateValues(leafRowValues, col.metricName);
     });
     return totals;
-  }, [flatRows, displayLeafColumns]);
+  }, [flatRows, visibleColumns]);
 
+  // Max value in column (for mini-bars)
+  const columnMaxValues = useMemo(() => {
+    const maxes: Record<string, number> = {};
+    visibleColumns.forEach(col => {
+      const vals = flatRows
+        .filter(r => r.type === 'leaf')
+        .map(r => getCellValue(r, col))
+        .filter(v => typeof v === 'number') as number[];
+      maxes[col.key] = vals.length > 0 ? Math.max(...vals, 0) : 0;
+    });
+    return maxes;
+  }, [flatRows, visibleColumns]);
+
+  // Color scale calculations
   const cellValuesForColorScale = useMemo(() => {
     const values: number[] = [];
     flatRows.forEach(r => {
       if (r.type === 'leaf') {
-        displayLeafColumns.forEach(lc => {
-          if (!lc.key.startsWith('row-total|||')) {
-            const v = getCellValue(r, lc);
+        visibleColumns.forEach(col => {
+          if (!col.isGrandTotal && !col.isSubtotal) {
+            const v = getCellValue(r, col);
             if (typeof v === 'number') values.push(v);
           }
         });
       }
     });
     return values;
-  }, [flatRows, displayLeafColumns]);
+  }, [flatRows, visibleColumns]);
 
   const minVal = Math.min(...cellValuesForColorScale, 0);
   const maxVal = Math.max(...cellValuesForColorScale, 1);
@@ -454,8 +770,91 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
     return `hsla(${hue}, 85%, 90%, ${0.1 + ratio * 0.8})`;
   };
 
+  // Selection toggle helper
+  const handleCellClick = (e: React.MouseEvent, dimName: string, value: string) => {
+    setSelectedCells(prev => {
+      const next = new Map(prev);
+      const currentSet = next.get(dimName);
+      if (!currentSet) {
+        // Not selected yet: add it
+        next.set(dimName, new Set([value]));
+      } else {
+        const newSet = new Set(currentSet);
+        if (newSet.has(value)) {
+          // Already selected: toggle off (remove it)
+          newSet.delete(value);
+          if (newSet.size === 0) {
+            next.delete(dimName);
+          } else {
+            next.set(dimName, newSet);
+          }
+        } else {
+          // Not selected: toggle on (add it)
+          newSet.add(value);
+          next.set(dimName, newSet);
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleApplyFilters = () => {
+    const filters: Record<string, string[]> = {};
+    selectedCells.forEach((values, dim) => {
+      filters[dim] = Array.from(values);
+    });
+    onFilterByValue?.(filters);
+    setSelectedCells(new Map());
+  };
+
+  const handleApplyExcludes = () => {
+    const filters: Record<string, string[]> = {};
+    selectedCells.forEach((values, dim) => {
+      filters[dim] = Array.from(values);
+    });
+    onExcludeValue?.(filters);
+    setSelectedCells(new Map());
+  };
+
+  const totalSelectedCount = Array.from(selectedCells.values()).reduce((sum, set) => sum + set.size, 0);
+
+  const handleApplyDrill = (targetCol: string) => {
+    selectedCells.forEach((values, dim) => {
+      onDrillDown?.(dim, targetCol, Array.from(values));
+    });
+    setSelectedCells(new Map());
+    setShowDrillDropdown(false);
+  };
+
+
+  const toggleGroup = (key: string) => {
+    if (!collapsibleGroups) return;
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleColGroup = (pathKey: string) => {
+    setCollapsedColGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(pathKey)) {
+        next.delete(pathKey);
+      } else {
+        next.add(pathKey);
+      }
+      return next;
+    });
+  };
+
+  // Row header cell renderer (handles vertical span and tree-like collapsing)
   const getRowHeaderCell = (rowIndex: number, colIdx: number) => {
-    const r = flatRows[rowIndex];
+    const r = filteredFlatRows[rowIndex];
     const L = rowDimNames.length;
 
     if (r.type === 'subtotal') {
@@ -475,11 +874,11 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
     if (r.type === 'collapsed-group') {
       const level = r.path.length - 1;
       if (colIdx < level) {
-        const isFirst = rowIndex === 0 || flatRows[rowIndex - 1].path[colIdx] !== r.path[colIdx];
+        const isFirst = rowIndex === 0 || filteredFlatRows[rowIndex - 1].path[colIdx] !== r.path[colIdx];
         if (isFirst) {
           let rowSpan = 1;
-          for (let i = rowIndex + 1; i < flatRows.length; i++) {
-            if (flatRows[i].path[colIdx] === r.path[colIdx]) {
+          for (let i = rowIndex + 1; i < filteredFlatRows.length; i++) {
+            if (filteredFlatRows[i].path[colIdx] === r.path[colIdx]) {
               rowSpan++;
             } else {
               break;
@@ -513,11 +912,11 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
     }
 
     // Leaf row
-    const isFirst = rowIndex === 0 || flatRows[rowIndex - 1].path[colIdx] !== r.path[colIdx];
+    const isFirst = rowIndex === 0 || filteredFlatRows[rowIndex - 1].path[colIdx] !== r.path[colIdx];
     if (isFirst) {
       let rowSpan = 1;
-      for (let i = rowIndex + 1; i < flatRows.length; i++) {
-        if (flatRows[i].path[colIdx] === r.path[colIdx]) {
+      for (let i = rowIndex + 1; i < filteredFlatRows.length; i++) {
+        if (filteredFlatRows[i].path[colIdx] === r.path[colIdx]) {
           rowSpan++;
         } else {
           break;
@@ -540,28 +939,29 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
 
   const colHeaderRowsCount = colDimNames.length + 1; // Col dims + Metric row
 
-  const getColHeaderCell = (rowIdx: number, leafColIdx: number) => {
+  // Column header cell renderer (handles horizontal span and column collapsing)
+  const getColHeaderCell = (rowIdx: number, visibleColIdx: number) => {
     const L = colDimNames.length;
-    const leafCol = displayLeafColumns[leafColIdx];
+    const col = visibleColumns[visibleColIdx];
     
     if (rowIdx === L) {
       return {
         render: true,
         colSpan: 1,
-        label: leafCol.metricName
+        label: col.metricName
       };
     }
 
-    const prefix = leafCol.colValues.slice(0, rowIdx + 1);
+    const prefix = col.colValues.slice(0, rowIdx + 1);
     const prefixKey = prefix.join('|||');
 
-    const isFirst = leafColIdx === 0 || 
-      displayLeafColumns[leafColIdx - 1].colValues.slice(0, rowIdx + 1).join('|||') !== prefixKey;
+    const isFirst = visibleColIdx === 0 || 
+      visibleColumns[visibleColIdx - 1].colValues.slice(0, rowIdx + 1).join('|||') !== prefixKey;
 
     if (isFirst) {
       let colSpan = 1;
-      for (let i = leafColIdx + 1; i < displayLeafColumns.length; i++) {
-        if (displayLeafColumns[i].colValues.slice(0, rowIdx + 1).join('|||') === prefixKey) {
+      for (let i = visibleColIdx + 1; i < visibleColumns.length; i++) {
+        if (visibleColumns[i].colValues.slice(0, rowIdx + 1).join('|||') === prefixKey) {
           colSpan++;
         } else {
           break;
@@ -570,83 +970,198 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
       return {
         render: true,
         colSpan,
-        label: leafCol.colValues[rowIdx] || ''
+        label: col.colValues[rowIdx] || '',
+        isCollapsible: rowIdx < L,
+        pathKey: col.colValues.slice(0, rowIdx + 1).join('|||'),
+        isCollapsed: collapsedColGroups.has(col.colValues.slice(0, rowIdx + 1).join('|||'))
       };
     }
 
     return { render: false };
   };
 
+  // Sticky col calculations
+  // Sticky col calculations
+  const getStickyLeft = (colIdx: number) => {
+    return stickyRowHeaders ? `${colIdx * 140}px` : undefined;
+  };
+
+  const handleContainerContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+    });
+  };
+
+
+  // Expand / Collapse all actions
+  const expandAllRows = () => {
+    setCollapsedGroups(new Set());
+  };
+
+  const collapseAllRows = () => {
+    const allKeys = new Set<string>();
+    const collectKeys = (node: any) => {
+      if (node.children && node.children.size > 0 && node.key) {
+        allKeys.add(node.key);
+        node.children.forEach((child: any) => collectKeys(child));
+      }
+    };
+    if (rowTree) {
+      rowTree.children.forEach(child => collectKeys(child));
+    }
+    setCollapsedGroups(allKeys);
+  };
+
+  const expandAllCols = () => {
+    setCollapsedColGroups(new Set());
+  };
+
+  const collapseAllCols = () => {
+    const allKeys = new Set<string>();
+    const collectKeys = (node: any) => {
+      if (node.children && node.children.size > 0 && node.key) {
+        allKeys.add(node.key);
+        node.children.forEach((child: any) => collectKeys(child));
+      }
+    };
+    colTree.children.forEach(child => collectKeys(child));
+    setCollapsedColGroups(allKeys);
+  };
+
+  // Grand totals row component
+  const GrandTotalsRow = () => (
+    <tr className="pivot-row-grand-total">
+      <td
+        colSpan={rowDimNames.length}
+        className="px-3 py-2.5 font-extrabold uppercase tracking-wide border-r text-right bg-slate-50/80 dark:bg-slate-800/50 pivot-sticky-col"
+        style={{
+          color: themeMeta?.text || '#1e293b',
+          borderColor: themeMeta?.border || borderColor || '#e2e8f0',
+          left: stickyRowHeaders ? '0px' : undefined,
+        }}
+      >
+        Grand Total
+      </td>
+      {visibleColumns.map((col, idx) => {
+        const val = columnGrandTotals[col.key];
+        const isNull = val === null || val === undefined;
+        return (
+          <td
+            key={`grand-total-${idx}`}
+            className={`px-3 py-2.5 pivot-value-cell ${col.isGrandTotal ? 'pivot-col-total' : ''}`}
+            style={{
+              color: col.isGrandTotal ? undefined : (themeMeta?.primary || '#6366f1'),
+              borderColor: themeMeta?.border || borderColor || '#e2e8f0',
+            }}
+          >
+            {formatValue(val)}
+          </td>
+        );
+      })}
+    </tr>
+  );
+
+  const availableDrillTargets = availableColumns.filter(col => col !== currentDimensionName);
+
+  const containerStyle = {
+    '--pivot-bg': themeMeta?.background || '#ffffff',
+    '--pivot-bg-even': themeMeta?.background 
+      ? `linear-gradient(rgba(0, 0, 0, 0.025), rgba(0, 0, 0, 0.025)), ${themeMeta.background}`
+      : '#f8fafc',
+    '--pivot-header-bg': themeMeta?.background || '#f8fafc',
+    '--pivot-border': themeMeta?.border || '#e2e8f0',
+    '--pivot-text': themeMeta?.text || '#1e293b',
+    '--pivot-hover': themeMeta?.background 
+      ? `linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04)), ${themeMeta.background}`
+      : '#f1f5f9',
+    backgroundColor: themeMeta?.background || '#ffffff',
+  } as React.CSSProperties;
+
   return (
-    <div
-      className="w-full h-full overflow-auto custom-scrollbar border rounded-lg shadow-sm"
-      style={{
-        backgroundColor: themeMeta?.background || '#ffffff',
-        borderColor: themeMeta?.border || borderColor || '#e2e8f0',
-      }}
+    <div 
+      className={`pivot-table-container pivot-density-${density} ${isScrolledX ? 'is-scrolled-x' : ''}`} 
+      onContextMenu={handleContainerContextMenu}
+      style={containerStyle}
     >
-      <table className="w-full text-left border-collapse min-w-full" style={{ fontSize: `${fontSize}px` }}>
-        <thead
-          className="sticky top-0 z-20 backdrop-blur-md"
-          style={{
-            backgroundColor: `${themeMeta?.background || '#ffffff'}f9`,
-          }}
-        >
+      <div className="pivot-table-scrollable" onScroll={handleScroll}>
+        {/* Pivot Core Table */}
+        <table className="pivot-table" style={{ fontSize: `${fontSize}px` }}>
+        
+        {/* Table Headers */}
+        <thead>
           {Array.from({ length: colHeaderRowsCount }).map((_, rowIdx) => {
-            const isLastHeaderRow = rowIdx === colHeaderRowsCount - 1;
-            const isFirstHeaderRow = rowIdx === 0;
             return (
               <tr 
                 key={`col-head-row-${rowIdx}`}
                 className="border-b"
                 style={{ borderColor: themeMeta?.border || borderColor || '#e2e8f0' }}
               >
-                {/* Top-left corner row headers */}
-                {isFirstHeaderRow && rowDimNames.map((_, dIdx) => (
+                {/* Empty / Label Corner Cells */}
+                {rowIdx === 0 && colDimNames.length > 0 && rowDimNames.map((_, dIdx) => (
                   <th
                     key={`corner-empty-${dIdx}`}
                     rowSpan={colDimNames.length}
-                    className="px-3 py-2 border-r bg-slate-50/50 dark:bg-slate-800/20"
-                    style={{ borderColor: themeMeta?.border || borderColor || '#e2e8f0' }}
+                    className="px-3 py-2 border-r pivot-sticky-col"
+                    style={{ 
+                      borderColor: themeMeta?.border || borderColor || '#e2e8f0',
+                      left: stickyRowHeaders ? getStickyLeft(dIdx) : undefined,
+                      width: stickyRowHeaders ? '140px' : undefined,
+                      minWidth: stickyRowHeaders ? '140px' : undefined,
+                      maxWidth: stickyRowHeaders ? '140px' : undefined,
+                    }}
                   />
                 ))}
                 
-                {isLastHeaderRow && rowDimNames.map((name, dIdx) => (
+                {rowIdx === colDimNames.length && rowDimNames.map((name, dIdx) => (
                   <th
                     key={`corner-label-${dIdx}`}
-                    className="px-3 py-2 border-r font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider bg-slate-50 dark:bg-slate-800/30"
+                    className="px-3 py-2 border-r font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider pivot-sticky-col"
                     style={{
                       color: themeMeta?.text || '#1e293b',
                       borderColor: themeMeta?.border || borderColor || '#e2e8f0',
+                      left: stickyRowHeaders ? getStickyLeft(dIdx) : undefined,
+                      width: stickyRowHeaders ? '140px' : undefined,
+                      minWidth: stickyRowHeaders ? '140px' : undefined,
+                      maxWidth: stickyRowHeaders ? '140px' : undefined,
                     }}
                   >
                     <div className="flex items-center gap-1.5 justify-between">
                       <span>{name}</span>
-                      <ArrowUpDown size={11} className="text-slate-400" />
                     </div>
                   </th>
                 ))}
 
-                {/* Column dimension headers */}
-                {displayLeafColumns.map((lc, leafColIdx) => {
-                  const cell = getColHeaderCell(rowIdx, leafColIdx);
+                {/* Column Dimension Headers */}
+                {visibleColumns.map((col, visibleColIdx) => {
+                  const cell = getColHeaderCell(rowIdx, visibleColIdx);
                   if (!cell.render) return null;
                   
-                  const isRowTotalCol = lc.colValues[0] === 'Row totals';
                   return (
                     <th
-                      key={`col-cell-${rowIdx}-${leafColIdx}`}
+                      key={`col-cell-${rowIdx}-${visibleColIdx}`}
                       colSpan={cell.colSpan}
                       className={`px-3 py-2 border-r text-center font-bold whitespace-nowrap ${
-                        isLastHeaderRow ? 'text-[11px] uppercase tracking-wider' : 'text-xs'
-                      } ${isRowTotalCol ? 'bg-slate-100/60 dark:bg-slate-800/40 text-slate-900 dark:text-slate-100 font-extrabold' : ''}`}
+                        col.isGrandTotal ? 'pivot-col-total text-indigo-600' : ''
+                      }`}
                       style={{
-                        color: isRowTotalCol ? (themeMeta?.primary || '#4f46e5') : (themeMeta?.text || '#1e293b'),
+                        color: col.isGrandTotal ? undefined : (themeMeta?.text || '#1e293b'),
                         borderColor: themeMeta?.border || borderColor || '#e2e8f0',
-                        backgroundColor: isRowTotalCol ? undefined : (isLastHeaderRow ? undefined : '#f8fafc22'),
                       }}
                     >
-                      {cell.label}
+                      <div className="inline-flex items-center justify-center gap-1">
+                        {cell.isCollapsible && cell.label && (
+                          <button
+                            onClick={() => toggleColGroup(cell.pathKey!)}
+                            className="p-0.5 hover:bg-slate-200/50 rounded transition-colors"
+                          >
+                            {cell.isCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+                          </button>
+                        )}
+                        <span>{cell.label}</span>
+                      </div>
                     </th>
                   );
                 })}
@@ -654,84 +1169,92 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
             );
           })}
         </thead>
-        <tbody
-          className="divide-y"
-          style={{
-            borderColor: themeMeta?.border || borderColor || '#e2e8f0',
-            backgroundColor: themeMeta?.background || '#ffffff',
-          }}
-        >
-          {flatRows.map((r, rowIndex) => {
+
+        {/* Table Body */}
+        <tbody>
+          
+          {/* Top Grand Totals Row */}
+          {showRowGrandTotal && totalPosition === 'top' && <GrandTotalsRow />}
+
+          {filteredFlatRows.map((r, rowIndex) => {
             const isSubtotalRow = r.type === 'subtotal';
             const isCollapsedRow = r.type === 'collapsed-group';
             
             return (
               <tr
                 key={`row-${r.key}`}
-                className={`transition-colors hover:bg-slate-500/[0.02] ${
-                  isSubtotalRow ? 'bg-slate-50/80 dark:bg-slate-800/10 font-bold' : ''
+                className={`pivot-row-${rowIndex % 2 === 0 ? 'even' : 'odd'} ${
+                  isSubtotalRow ? 'pivot-row-subtotal font-bold' : ''
                 } ${isCollapsedRow ? 'bg-slate-100/30 dark:bg-slate-800/5 font-medium' : ''}`}
               >
                 {/* Row Header Dimensions */}
-                {rowDimNames.map((_, colIdx) => {
+                {rowDimNames.map((dimName, colIdx) => {
                   const cell = getRowHeaderCell(rowIndex, colIdx);
                   if (!cell.render) return null;
+                  
+                  const cellSelected = selectedCells.get(dimName)?.has(String(cell.label));
                   
                   return (
                     <td
                       key={`row-header-val-${rowIndex}-${colIdx}`}
                       colSpan={cell.colSpan}
                       rowSpan={cell.rowSpan}
-                      className={`px-3 py-2 border-r align-middle whitespace-nowrap ${
-                        cell.isSubtotal ? 'font-bold text-slate-700 dark:text-slate-300 italic pl-6' : ''
-                      } ${cell.isGroupHeader ? 'font-semibold text-slate-900 dark:text-slate-100 bg-slate-50/20' : ''}`}
+                      onClick={(e) => {
+                        if (!cell.isSubtotal) {
+                          handleCellClick(e, dimName, String(cell.label));
+                        }
+                      }}
+                      className={`pivot-row-header pivot-sticky-col ${cellSelected ? 'pivot-cell--selected' : ''}`}
                       style={{
                         borderColor: themeMeta?.border || borderColor || '#e2e8f0',
                         color: themeMeta?.text || '#1e293b',
+                        left: stickyRowHeaders ? getStickyLeft(colIdx) : undefined,
+                        width: (stickyRowHeaders && cell.colSpan === 1) ? '140px' : undefined,
+                        minWidth: (stickyRowHeaders && cell.colSpan === 1) ? '140px' : undefined,
+                        maxWidth: (stickyRowHeaders && cell.colSpan === 1) ? '140px' : undefined,
                       }}
                     >
-                      <div className="flex items-center gap-1.5 select-none">
+                      <div className="pivot-row-header-content">
                         {cell.isGroupHeader && (
                           <button
-                            onClick={() => toggleGroup(cell.groupKey!)}
-                            className="p-0.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors text-slate-400 hover:text-slate-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleGroup(cell.groupKey!);
+                            }}
+                            className="pivot-group-toggle"
                           >
-                            {cell.collapsed ? (
-                              <ChevronRight size={14} className="stroke-[2.5]" />
-                            ) : (
-                              <ChevronDown size={14} className="stroke-[2.5]" />
-                            )}
+                            {cell.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                           </button>
                         )}
-                        <span 
-                          className={!cell.isSubtotal ? 'cursor-context-menu' : ''}
-                          onContextMenu={
-                            !cell.isSubtotal && onDrillContextMenu 
-                              ? (e) => onDrillContextMenu(e, String(cell.label), rowDimNames[colIdx]) 
-                              : undefined
-                          }
-                        >
-                          {cell.label}
-                        </span>
+                        
+                        {!cell.isSubtotal && (
+                          <div className={`pivot-depth-indicator pivot-depth-indicator--l${colIdx}`} />
+                        )}
+                        
+                        <span className="truncate">{cell.label}</span>
                       </div>
                     </td>
                   );
                 })}
 
                 {/* Values cells */}
-                {displayLeafColumns.map((lc, leafColIdx) => {
-                  const val = getCellValue(r, lc);
+                {visibleColumns.map((col, visibleColIdx) => {
+                  const val = getCellValue(r, col);
                   const isNull = val === null || val === undefined;
-                  const isRowTotal = lc.colValues[0] === 'Row totals';
+                  const isRowTotal = col.isGrandTotal;
                   
+                  // Compute bar percentage
+                  const maxVal = columnMaxValues[col.key] || 1;
+                  const pct = maxVal > 0 ? Math.min(100, Math.max(0, (Number(val) / maxVal) * 100)) : 0;
+
                   return (
                     <td
-                      key={`cell-val-${rowIndex}-${leafColIdx}`}
-                      className={`px-3 py-1.5 tabular-nums text-right border-r transition-colors ${
-                        highlightCells && !isRowTotal && !isSubtotalRow ? 'hover:bg-slate-200/30' : ''
-                      } ${isRowTotal ? 'bg-slate-100/30 dark:bg-slate-800/10 font-bold' : ''} ${
-                        isSubtotalRow ? 'font-bold' : ''
-                      }`}
+                      key={`cell-val-${rowIndex}-${visibleColIdx}`}
+                      onMouseEnter={() => setHoveredColKey(col.key)}
+                      onMouseLeave={() => setHoveredColKey(null)}
+                      className={`pivot-value-cell ${isRowTotal ? 'pivot-col-total' : ''} ${
+                        hoveredColKey === col.key ? 'pivot-col-hover' : ''
+                      } ${isNull ? 'pivot-value-cell--null' : ''}`}
                       style={{
                         color: isRowTotal ? (themeMeta?.primary || '#4f46e5') : (themeMeta?.text || '#1e293b'),
                         borderColor: themeMeta?.border || borderColor || '#e2e8f0',
@@ -739,12 +1262,19 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
                         fontWeight: (isRowTotal || isSubtotalRow) ? totalFontWeight as any : 'normal',
                       }}
                     >
-                      {isNull ? (
-                        <span className="text-slate-300 dark:text-slate-700">-</span>
-                      ) : typeof val === 'number' ? (
-                        val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-                      ) : (
-                        String(val)
+                      <span>{formatValue(val)}</span>
+                      
+                      {/* Mini Bar Visualizer */}
+                      {showMiniBar && typeof val === 'number' && !isRowTotal && !isSubtotalRow && (
+                        <div className="pivot-mini-bar">
+                          <div 
+                            className="pivot-mini-bar-fill" 
+                            style={{ 
+                              width: `${pct}%`, 
+                              backgroundColor: themeMeta?.primary || '#6366f1' 
+                            }} 
+                          />
+                        </div>
                       )}
                     </td>
                   );
@@ -753,52 +1283,129 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
             );
           })}
 
-          {/* Grand Totals Row */}
-          {showGrandTotal && (
-            <tr
-              className="bg-slate-100/60 dark:bg-slate-800/30 border-t-2 font-extrabold"
-              style={{ borderTopColor: themeMeta?.primary || '#6366F1' }}
-            >
-              <td
-                colSpan={rowDimNames.length}
-                className="px-3 py-2.5 font-extrabold uppercase tracking-wide border-r text-right bg-slate-50/80 dark:bg-slate-800/50"
-                style={{
-                  color: themeMeta?.text || '#1e293b',
-                  borderColor: themeMeta?.border || borderColor || '#e2e8f0',
-                }}
-              >
-                Grand Total
-              </td>
-              {displayLeafColumns.map((lc, leafColIdx) => {
-                const val = columnGrandTotals[lc.key];
-                const isNull = val === null || val === undefined;
-                const isRowTotal = lc.colValues[0] === 'Row totals';
-                
-                return (
-                  <td
-                    key={`grand-total-val-${leafColIdx}`}
-                    className={`px-3 py-2.5 tabular-nums text-right border-r ${
-                      isRowTotal ? 'bg-slate-100/80 dark:bg-slate-800/40 text-indigo-600 dark:text-indigo-400 font-black' : ''
-                    }`}
-                    style={{
-                      color: isRowTotal ? undefined : (themeMeta?.primary || '#6366F1'),
-                      borderColor: themeMeta?.border || borderColor || '#e2e8f0',
-                    }}
-                  >
-                    {isNull ? (
-                      <span className="text-slate-300 dark:text-slate-700">-</span>
-                    ) : typeof val === 'number' ? (
-                      val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-                    ) : (
-                      String(val)
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          )}
+          {/* Bottom Grand Totals Row */}
+          {showRowGrandTotal && totalPosition === 'bottom' && <GrandTotalsRow />}
         </tbody>
       </table>
+      </div>
+
+      {/* Floating Action Bar / Drill Menu (shows only when selection is active) */}
+      {totalSelectedCount > 0 && (
+        <div className="pivot-selection-bar">
+          <span className="pivot-selection-bar-count">{totalSelectedCount}</span>
+          <span>selected</span>
+          
+          <button className="pivot-selection-bar-btn" onClick={handleApplyFilters}>
+            <Filter size={11} /> Filter
+          </button>
+          
+          <button className="pivot-selection-bar-btn pivot-selection-bar-btn--danger" onClick={handleApplyExcludes}>
+            <X size={11} /> Exclude
+          </button>
+
+          {/* Drill Down options */}
+          {availableDrillTargets.length > 0 && (
+            <div>
+              <button 
+                ref={buttonRef}
+                className="pivot-selection-bar-btn" 
+                onClick={() => setShowDrillDropdown(!showDrillDropdown)}
+              >
+                <Layers size={11} /> Drill Down
+              </button>
+              
+              {showDrillDropdown && createPortal(
+                <div 
+                  ref={dropdownRef}
+                  style={{
+                    position: 'fixed',
+                    left: dropdownPos.left,
+                    top: dropdownPos.top - 4,
+                    transform: 'translateY(-100%)',
+                    width: '180px',
+                    zIndex: 99999,
+                  }}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg py-1 text-slate-800 dark:text-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-1"
+                >
+                  <div className="px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                    Drill dimension
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {availableDrillTargets.map(col => (
+                      <button
+                        key={col}
+                        onClick={() => handleApplyDrill(col)}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                        {col}
+                      </button>
+                    ))}
+                  </div>
+                </div>,
+                document.body
+              )}
+            </div>
+          )}
+          
+          <button 
+            className="pivot-selection-bar-btn pivot-selection-bar-btn--clear" 
+            onClick={() => setSelectedCells(new Map())}
+          >
+            Clear Selection
+          </button>
+        </div>
+      )}
+
+      {/* Context Menu / Drill Menu */}
+      {contextMenu && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: contextMenu.x,
+            top: contextMenu.y,
+            zIndex: 99999,
+          }}
+          className="w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-1 text-slate-800 dark:text-slate-200 text-xs animate-in fade-in zoom-in-95 duration-100"
+        >
+          <div className="px-3 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+            Table Options
+          </div>
+          
+          <button
+            onClick={expandAllRows}
+            className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+          >
+            Expand All Rows
+          </button>
+          
+          <button
+            onClick={collapseAllRows}
+            className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+          >
+            Collapse All Rows
+          </button>
+
+          {colDimNames.length > 0 && (
+            <>
+              <button
+                onClick={expandAllCols}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+              >
+                Expand All Columns
+              </button>
+              
+              <button
+                onClick={collapseAllCols}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+              >
+                Collapse All Columns
+              </button>
+            </>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

@@ -69,7 +69,10 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
   }, [drillStack]);
 
   const drillDown = useCallback(
-    (fromDimension: string, toDimension: string, clickedValue: string) => {
+    (fromDimension: string, toDimension: string, clickedValue: string | string[]) => {
+      const displayLabel = Array.isArray(clickedValue)
+        ? `${fromDimension}: ${clickedValue.length} items`
+        : `${fromDimension}: ${clickedValue}`;
       setDrillStack((prev) => [
         ...prev,
         {
@@ -77,7 +80,7 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
           toDimension,
           filterColumn: fromDimension,
           filterValue: clickedValue,
-          label: `${fromDimension}: ${clickedValue}`,
+          label: displayLabel,
         },
       ]);
     },
@@ -97,36 +100,65 @@ export function useDrillDown(restoreAction?: { stack: DrillLevel[]; timestamp: n
   }, []);
 
   const filterByValue = useCallback(
-    (column: string, value: string | string[]) => {
-      const labelValue = Array.isArray(value) ? `${value.length} items` : value;
-      setDrillStack((prev) => [
-        ...prev,
-        {
-          fromDimension: column,
-          toDimension: prev.length > 0 ? prev[prev.length - 1].toDimension : column,
-          filterColumn: column,
-          filterValue: value as any,
-          label: `${column} = ${labelValue}`,
-        },
-      ]);
+    (column: string | Record<string, string | string[]>, value?: string | string[]) => {
+      setDrillStack((prev) => {
+        const newLevels: any[] = [];
+        if (typeof column === 'object') {
+          Object.entries(column).forEach(([col, val]) => {
+            const labelValue = Array.isArray(val) ? `${val.length} items` : val;
+            newLevels.push({
+              fromDimension: col,
+              toDimension: prev.length > 0 ? prev[prev.length - 1].toDimension : col,
+              filterColumn: col,
+              filterValue: val as any,
+              label: `${col} = ${labelValue}`,
+            });
+          });
+        } else {
+          const labelValue = Array.isArray(value) ? `${value.length} items` : value;
+          newLevels.push({
+            fromDimension: column,
+            toDimension: prev.length > 0 ? prev[prev.length - 1].toDimension : column,
+            filterColumn: column,
+            filterValue: value as any,
+            label: `${column} = ${labelValue}`,
+          });
+        }
+        return [...prev, ...newLevels];
+      });
     },
     [],
   );
 
   const excludeValue = useCallback(
-    (column: string, value: string | string[]) => {
-      const labelValue = Array.isArray(value) ? `${value.length} items` : value;
-      const finalValue = Array.isArray(value) ? value.map(v => `__EXCLUDE__${v}`) : `__EXCLUDE__${value}`;
-      setDrillStack((prev) => [
-        ...prev,
-        {
-          fromDimension: column,
-          toDimension: prev.length > 0 ? prev[prev.length - 1].toDimension : column,
-          filterColumn: column,
-          filterValue: finalValue as any,
-          label: `${column} ≠ ${labelValue}`,
-        },
-      ]);
+    (column: string | Record<string, string | string[]>, value?: string | string[]) => {
+      setDrillStack((prev) => {
+        const newLevels: any[] = [];
+        if (typeof column === 'object') {
+          Object.entries(column).forEach(([col, val]) => {
+            const labelValue = Array.isArray(val) ? `${val.length} items` : val;
+            const finalValue = Array.isArray(val) ? val.map(v => `__EXCLUDE__${v}`) : `__EXCLUDE__${val}`;
+            newLevels.push({
+              fromDimension: col,
+              toDimension: prev.length > 0 ? prev[prev.length - 1].toDimension : col,
+              filterColumn: col,
+              filterValue: finalValue as any,
+              label: `${col} ≠ ${labelValue}`,
+            });
+          });
+        } else {
+          const labelValue = Array.isArray(value) ? `${value.length} items` : value;
+          const finalValue = Array.isArray(value) ? value.map(v => `__EXCLUDE__${v}`) : `__EXCLUDE__${value}`;
+          newLevels.push({
+            fromDimension: column,
+            toDimension: prev.length > 0 ? prev[prev.length - 1].toDimension : column,
+            filterColumn: column,
+            filterValue: finalValue as any,
+            label: `${column} ≠ ${labelValue}`,
+          });
+        }
+        return [...prev, ...newLevels];
+      });
     },
     [],
   );

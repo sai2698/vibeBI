@@ -87,12 +87,12 @@ interface EChartWrapperProps {
   drillStack?: DrillLevel[];
   availableColumns?: string[];
   currentDimensionName?: string;
-  onDrillDown?: (fromDimension: string, toDimension: string, clickedValue: string) => void;
+  onDrillDown?: (fromDimension: string, toDimension: string, clickedValue: string | string[]) => void;
   onDrillUp?: () => void;
   onDrillToLevel?: (level: number) => void;
   onResetDrill?: () => void;
-  onFilterByValue?: (column: string, value: string | string[]) => void;
-  onExcludeValue?: (column: string, value: string | string[]) => void;
+  onFilterByValue?: (column: string | Record<string, string | string[]>, value?: string | string[]) => void;
+  onExcludeValue?: (column: string | Record<string, string | string[]>, value?: string | string[]) => void;
 }
 
 const brandColors = [
@@ -549,14 +549,14 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
   }, []);
 
   // Callback for React-based chart components (DataTable, Pivot, KPI)
-  const handleReactChartContextMenu = useCallback((e: React.MouseEvent, cellValue: string, colName: string) => {
+  const handleReactChartContextMenu = useCallback((e: React.MouseEvent, cellValue: string | string[], colName: string) => {
     if (!onFilterByValueRef.current && !onDrillDownRef.current) return;
     e.preventDefault();
     setDrillMenu({
       x: e.clientX,
       y: e.clientY,
       info: {
-        categoryValue: String(cellValue),
+        categoryValue: Array.isArray(cellValue) ? cellValue : String(cellValue),
         seriesName: String(colName),
         dataValue: '',
         dimensionName: colName || currentDimensionNameRef.current,
@@ -1028,8 +1028,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             currentDimension={currentDimensionName}
             canDrillUp={(drillStack?.length ?? 0) > 0}
             onDrillDown={(targetCol) => {
-              const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, catVal);
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
             }}
             onDrillUp={() => onDrillUp?.()}
             onFilterByValue={() => {
@@ -1105,7 +1104,11 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
               pivotData={data.pivotData}
               visualConfig={visualConfig}
               themeMeta={themeMeta}
-              onDrillContextMenu={handleReactChartContextMenu}
+              onDrillDown={onDrillDown}
+              onFilterByValue={onFilterByValue}
+              onExcludeValue={onExcludeValue}
+              availableColumns={availableColumns}
+              currentDimensionName={currentDimensionName}
             />
           </div>
         </div>
@@ -1120,8 +1123,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             currentDimension={currentDimensionName}
             canDrillUp={(drillStack?.length ?? 0) > 0}
             onDrillDown={(targetCol) => {
-              const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, catVal);
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
             }}
             onDrillUp={() => onDrillUp?.()}
             onFilterByValue={() => {
@@ -1331,8 +1333,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
           currentDimension={currentDimensionName}
           canDrillUp={drillStack.length > 0}
           onDrillDown={(targetCol) => {
-            const catVal = Array.isArray(drillMenu.info.categoryValue) ? drillMenu.info.categoryValue[0] : drillMenu.info.categoryValue;
-            onDrillDown(drillMenu.info.dimensionName, targetCol, catVal);
+            onDrillDown(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
           }}
           onDrillUp={() => onDrillUp?.()}
           onFilterByValue={() => {
