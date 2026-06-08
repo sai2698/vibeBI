@@ -1226,11 +1226,6 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
                             {cell.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                           </button>
                         )}
-                        
-                        {!cell.isSubtotal && (
-                          <div className={`pivot-depth-indicator pivot-depth-indicator--l${colIdx}`} />
-                        )}
-                        
                         <span className="truncate">{cell.label}</span>
                       </div>
                     </td>

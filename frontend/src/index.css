@@ -804,6 +804,10 @@ th.pivot-sticky-col {
   position: relative;
 }
 
+.pivot-sticky-col.pivot-cell--selected {
+  position: sticky !important;
+}
+
 .pivot-cell--selected::after {
   content: '';
   position: absolute;
