@@ -36,38 +36,111 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
     def beautify_sql(sql: str) -> str:
         import re
         
-        # Normalize whitespace first
-        sql = ' '.join(sql.split())
+        # ── Quote-aware whitespace normalizer ──
+        # Splits SQL into segments inside vs outside single-quoted strings.
+        # Only normalizes whitespace in segments OUTSIDE quotes, preserving
+        # original spacing in data values like 'Kanpur II  LPG SA'.
+        def normalize_outside_quotes(s: str) -> str:
+            parts = []
+            in_quote = False
+            current = []
+            i = 0
+            while i < len(s):
+                ch = s[i]
+                if ch == "'" and not in_quote:
+                    # Flush non-quoted segment with whitespace normalization
+                    segment = ''.join(current)
+                    parts.append(' '.join(segment.split()))
+                    current = ["'"]
+                    in_quote = True
+                elif ch == "'" and in_quote:
+                    # Check for escaped quote ('')
+                    if i + 1 < len(s) and s[i + 1] == "'":
+                        current.append("''")
+                        i += 2
+                        continue
+                    current.append("'")
+                    # Flush quoted segment as-is (preserve original whitespace)
+                    parts.append(''.join(current))
+                    current = []
+                    in_quote = False
+                else:
+                    current.append(ch)
+                i += 1
+            # Flush remaining
+            segment = ''.join(current)
+            if in_quote:
+                parts.append(segment)  # inside unclosed quote — preserve as-is
+            else:
+                parts.append(' '.join(segment.split()))
+            return ''.join(parts)
+        
+        # ── Quote-aware regex substitution ──
+        # Applies a regex replacement only to text outside single-quoted strings.
+        def re_sub_outside_quotes(pattern, replacement, s, flags=0):
+            parts = []
+            in_quote = False
+            current = []
+            i = 0
+            while i < len(s):
+                ch = s[i]
+                if ch == "'" and not in_quote:
+                    # Flush and apply regex to non-quoted segment
+                    segment = ''.join(current)
+                    parts.append(re.sub(pattern, replacement, segment, flags=flags))
+                    current = ["'"]
+                    in_quote = True
+                elif ch == "'" and in_quote:
+                    if i + 1 < len(s) and s[i + 1] == "'":
+                        current.append("''")
+                        i += 2
+                        continue
+                    current.append("'")
+                    parts.append(''.join(current))
+                    current = []
+                    in_quote = False
+                else:
+                    current.append(ch)
+                i += 1
+            segment = ''.join(current)
+            if in_quote:
+                parts.append(segment)
+            else:
+                parts.append(re.sub(pattern, replacement, segment, flags=flags))
+            return ''.join(parts)
+        
+        # Normalize whitespace only outside quoted strings
+        sql = normalize_outside_quotes(sql)
         
         # Format FROM clause
-        sql = re.sub(r'\b(FROM)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(FROM)\b', r'\n\1', sql, flags=re.IGNORECASE)
         
         # Format JOIN clauses with proper indentation
-        sql = re.sub(r'\b(LEFT\s+OUTER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(RIGHT\s+OUTER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(FULL\s+OUTER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(LEFT\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(RIGHT\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(INNER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(FULL\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(CROSS\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(LEFT\s+OUTER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(RIGHT\s+OUTER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(FULL\s+OUTER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(LEFT\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(RIGHT\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(INNER\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(FULL\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(CROSS\s+JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(JOIN)\b', r'\n\1', sql, flags=re.IGNORECASE)
         
         # Add newlines for WHERE, GROUP BY, HAVING, ORDER BY, LIMIT
-        sql = re.sub(r'\b(WHERE)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(GROUP\s+BY)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(HAVING)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(ORDER\s+BY)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(LIMIT)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(FETCH\s+FIRST)\b', r'\n\1', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(ROWNUM)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(WHERE)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(GROUP\s+BY)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(HAVING)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(ORDER\s+BY)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(LIMIT)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(FETCH\s+FIRST)\b', r'\n\1', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(ROWNUM)\b', r'\n\1', sql, flags=re.IGNORECASE)
         
         # Format ON clauses with indentation
-        sql = re.sub(r'\b(ON)\b', r'\n  ON', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(ON)\b', r'\n  ON', sql, flags=re.IGNORECASE)
         
         # Format AND/OR in WHERE clauses with proper indentation
-        sql = re.sub(r'\b(AND)\b', r'\n  AND', sql, flags=re.IGNORECASE)
-        sql = re.sub(r'\b(OR)\b', r'\n  OR', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(AND)\b', r'\n  AND', sql, flags=re.IGNORECASE)
+        sql = re_sub_outside_quotes(r'\b(OR)\b', r'\n  OR', sql, flags=re.IGNORECASE)
         
         # Add indentation for SELECT columns (comma-separated)
         def format_select_columns(match):
@@ -83,8 +156,8 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
         # Clean up multiple newlines
         sql = re.sub(r'\n\s*\n', r'\n', sql)
         
-        # Clean up extra spaces
-        sql = re.sub(r'  +', r' ', sql)
+        # Clean up extra spaces ONLY outside quotes (preserve multi-space data values)
+        sql = normalize_outside_quotes(sql)
         
         # Remove trailing spaces from each line
         lines = [line.rstrip() for line in sql.split('\n')]
@@ -142,21 +215,77 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
             
             if value is None or value == "" or value == []:
                 return ""
+            
+            # ── Helper to build SQL for a single value, handling __NULL__ / __EMPTY__ sentinels ──
+            def single_value_expr(v, op_type, col):
+                """Return SQL expression for a single value with sentinel support.
+                op_type: 'eq' for = / IN, 'neq' for != / NOT IN"""
+                str_v = str(v)
+                if str_v == '__NULL__':
+                    return f"{col} IS NULL" if op_type == 'eq' else f"{col} IS NOT NULL"
+                if str_v == '__EMPTY__':
+                    cast_col = f"CAST({col} AS VARCHAR)"
+                    if op_type == 'eq':
+                        return f"({cast_col} = '' OR {cast_col} = '{{}}' OR {cast_col} = '[]')"
+                    else:
+                        return f"({cast_col} != '' AND {cast_col} != '{{}}' AND {cast_col} != '[]')"
+                return None  # not a sentinel
+            
+            def build_list_filter(values, col, is_exclude=False):
+                """Build filter expression for a list of values, separating sentinels from regular values."""
+                op_type = 'neq' if is_exclude else 'eq'
+                sentinel_parts = []
+                regular_values = []
+                
+                for v in values:
+                    sent_expr = single_value_expr(v, op_type, col)
+                    if sent_expr:
+                        sentinel_parts.append(sent_expr)
+                    else:
+                        regular_values.append(v)
+                
+                parts = []
+                if regular_values:
+                    vals_str = ", ".join([f"'{escape_sql_string(str(v))}'" for v in regular_values])
+                    if is_exclude:
+                        if len(regular_values) == 1:
+                            parts.append(f"{col} != {vals_str}")
+                        else:
+                            parts.append(f"{col} NOT IN ({vals_str})")
+                    else:
+                        if len(regular_values) == 1:
+                            parts.append(f"{col} = {vals_str}")
+                        else:
+                            parts.append(f"{col} IN ({vals_str})")
+                
+                parts.extend(sentinel_parts)
+                
+                if not parts:
+                    return ""
+                if len(parts) == 1:
+                    return parts[0]
+                # For include: combine with OR (value IN (...) OR col IS NULL)
+                # For exclude: combine with AND (value NOT IN (...) AND col IS NOT NULL)
+                joiner = " AND " if is_exclude else " OR "
+                return f"({joiner.join(parts)})"
+            
+            # Handle single-value sentinels
+            if not isinstance(value, list):
+                sent = single_value_expr(value, 'neq' if rule_op == 'NOT_EQUALS' else 'eq', col_expr)
+                if sent:
+                    return sent
                 
             if rule_op == "IN" and isinstance(value, list):
-                vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in value])
-                return f"{col_expr} IN ({vals})"
+                return build_list_filter(value, col_expr, is_exclude=False)
             elif rule_op == "NOT_IN" and isinstance(value, list):
-                vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in value])
-                return f"{col_expr} NOT IN ({vals})"
+                return build_list_filter(value, col_expr, is_exclude=True)
             elif rule_op == "EQUALS":
                 return f"{col_expr} = '{escape_sql_string(str(value))}'"
             elif rule_op == "NOT_EQUALS":
                 return f"{col_expr} != '{escape_sql_string(str(value))}'"
             else:
                 if isinstance(value, list):
-                    vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in value])
-                    return f"{col_expr} IN ({vals})"
+                    return build_list_filter(value, col_expr, is_exclude=False)
                 else:
                     return f"{col_expr} = '{escape_sql_string(str(value))}'"
                     
@@ -258,35 +387,80 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                             excludes.append(v[11:])
                         else:
                             includes.append(v)
+                    
+                    # Helper to separate sentinels (__NULL__, __EMPTY__) from regular values
+                    def partition_sentinels(values, col, is_exclude=False):
+                        """Returns list of SQL condition strings, handling __NULL__ and __EMPTY__ sentinels."""
+                        sentinel_conds = []
+                        regular_vals = []
+                        for v in values:
+                            str_v = str(v)
+                            if str_v == '__NULL__':
+                                sentinel_conds.append(f"{col} IS NOT NULL" if is_exclude else f"{col} IS NULL")
+                            elif str_v == '__EMPTY__':
+                                cast_col = f"CAST({col} AS VARCHAR)"
+                                if is_exclude:
+                                    sentinel_conds.append(f"({cast_col} != '' AND {cast_col} != '{{}}' AND {cast_col} != '[]')")
+                                else:
+                                    sentinel_conds.append(f"({cast_col} = '' OR {cast_col} = '{{}}' OR {cast_col} = '[]')")
+                            else:
+                                regular_vals.append(v)
+                        return regular_vals, sentinel_conds
                             
                     item_conds = []
                     if includes:
-                        col_expr_inc = col_expr
-                        has_non_numeric_str_inc = any(isinstance(v, str) and not is_numeric_string(v) for v in includes)
-                        if has_non_numeric_str_inc:
-                            col_expr_inc = f"CAST({col_expr_inc} AS VARCHAR)"
+                        regular_inc, sentinel_inc_conds = partition_sentinels(includes, col_expr, is_exclude=False)
                         
-                        if len(includes) == 1:
-                            v = includes[0]
-                            val_str = f"'{escape_sql_string(str(v))}'"
-                            item_conds.append(f"{col_expr_inc} = {val_str}")
-                        else:
-                            vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in includes])
-                            item_conds.append(f"{col_expr_inc} IN ({vals})")
+                        inc_parts = []
+                        if regular_inc:
+                            col_expr_inc = col_expr
+                            has_non_numeric_str_inc = any(isinstance(v, str) and not is_numeric_string(v) for v in regular_inc)
+                            if has_non_numeric_str_inc:
+                                col_expr_inc = f"CAST({col_expr_inc} AS VARCHAR)"
+                            
+                            if len(regular_inc) == 1:
+                                v = regular_inc[0]
+                                val_str = f"'{escape_sql_string(str(v))}'"
+                                inc_parts.append(f"{col_expr_inc} = {val_str}")
+                            else:
+                                vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in regular_inc])
+                                inc_parts.append(f"{col_expr_inc} IN ({vals})")
+                        
+                        inc_parts.extend(sentinel_inc_conds)
+                        
+                        if inc_parts:
+                            if len(inc_parts) == 1:
+                                item_conds.append(inc_parts[0])
+                            else:
+                                # Include: combine with OR (IN (...) OR IS NULL)
+                                item_conds.append(f"({' OR '.join(inc_parts)})")
                             
                     if excludes:
-                        col_expr_exc = col_expr
-                        has_non_numeric_str_exc = any(isinstance(v, str) and not is_numeric_string(v) for v in excludes)
-                        if has_non_numeric_str_exc:
-                            col_expr_exc = f"CAST({col_expr_exc} AS VARCHAR)"
+                        regular_exc, sentinel_exc_conds = partition_sentinels(excludes, col_expr, is_exclude=True)
                         
-                        if len(excludes) == 1:
-                            v = excludes[0]
-                            val_str = f"'{escape_sql_string(str(v))}'"
-                            item_conds.append(f"{col_expr_exc} != {val_str}")
-                        else:
-                            vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in excludes])
-                            item_conds.append(f"{col_expr_exc} NOT IN ({vals})")
+                        exc_parts = []
+                        if regular_exc:
+                            col_expr_exc = col_expr
+                            has_non_numeric_str_exc = any(isinstance(v, str) and not is_numeric_string(v) for v in regular_exc)
+                            if has_non_numeric_str_exc:
+                                col_expr_exc = f"CAST({col_expr_exc} AS VARCHAR)"
+                            
+                            if len(regular_exc) == 1:
+                                v = regular_exc[0]
+                                val_str = f"'{escape_sql_string(str(v))}'"
+                                exc_parts.append(f"{col_expr_exc} != {val_str}")
+                            else:
+                                vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in regular_exc])
+                                exc_parts.append(f"{col_expr_exc} NOT IN ({vals})")
+                        
+                        exc_parts.extend(sentinel_exc_conds)
+                        
+                        if exc_parts:
+                            if len(exc_parts) == 1:
+                                item_conds.append(exc_parts[0])
+                            else:
+                                # Exclude: combine with AND (NOT IN (...) AND IS NOT NULL)
+                                item_conds.append(f"({' AND '.join(exc_parts)})")
                             
                     if item_conds:
                         if len(item_conds) == 1:

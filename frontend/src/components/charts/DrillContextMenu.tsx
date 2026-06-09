@@ -11,6 +11,8 @@ import {
   Layers,
 } from 'lucide-react';
 
+import { displayCategoryValue } from '../../utils/chartUtils';
+
 export interface DrillMenuClickInfo {
   /** The category value that was clicked (e.g. "North") or array of values */
   categoryValue: string | string[];
@@ -150,7 +152,7 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
         <span className="drill-menu-header-label">
           {Array.isArray(clickInfo.categoryValue) 
             ? `${clickInfo.categoryValue.length} items selected` 
-            : clickInfo.categoryValue}
+            : displayCategoryValue(clickInfo.categoryValue)}
         </span>
         <span className="drill-menu-header-sub">
           {clickInfo.seriesName}: {typeof clickInfo.dataValue === 'number' ? clickInfo.dataValue.toLocaleString() : clickInfo.dataValue}

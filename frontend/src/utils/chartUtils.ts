@@ -11,6 +11,40 @@ export interface ChartData {
   pivotData?: any; // Rich structured data for pivot table
 }
 
+/**
+ * Convert a raw dimension value to a safe category string.
+ * null/undefined → '__NULL__', empty string → '__EMPTY__', otherwise String(v).
+ * This ensures drill-down and filter operations send the correct sentinel
+ * back to the backend for proper SQL generation (IS NULL / = '').
+ */
+export const toSafeCategoryValue = (v: any): string => {
+  if (v === null || v === undefined) return '__NULL__';
+  const s = String(v);
+  if (s.trim() === '') return '__EMPTY__';
+  return s;
+};
+
+/**
+ * Convert sentinel values to user-friendly display labels for chart axes.
+ */
+export const displayCategoryValue = (v: string): string => {
+  if (v === '__NULL__') return '(No Value)';
+  if (v === '__EMPTY__') return '(Empty)';
+  return v;
+};
+
+/**
+ * Convert user-friendly display labels back to sentinel values.
+ */
+export const toSentinelValue = (v: any): any => {
+  if (Array.isArray(v)) {
+    return v.map(toSentinelValue);
+  }
+  const s = String(v);
+  if (s === '(No Value)') return '__NULL__';
+  if (s === '(Empty)') return '__EMPTY__';
+  return v;
+};
 
 export const transformChartData = (
   resData: any[],
@@ -83,7 +117,7 @@ export const transformChartData = (
 
     return {
       series: resData.map((row: any) => ({
-        name: dimensions.map(d => String(row[getName(d)] ?? '')).join(' - ') || 'Total',
+        name: dimensions.map(d => toSafeCategoryValue(row[getName(d)])).join(' - ') || 'Total',
         value: mDisplay ? row[mDisplay] : 0
       }))
     };
@@ -230,7 +264,7 @@ export const transformChartData = (
   // ── DataTable & PivotTable — use the same format as default but ensure dimensions are properly structured ──
   if (chartType === 'table') {
     const categories = resData.map((row: any) =>
-      dimensions.map(d => String(row[getDisplayName(d)] ?? '')).join(' - ')
+      dimensions.map(d => toSafeCategoryValue(row[getDisplayName(d)])).join(' - ')
     );
 
     const series = metrics.map(m => {
@@ -258,7 +292,7 @@ export const transformChartData = (
 
   // ── Default (Bar, Line, Area, Scatter, etc.) ──
   const categories = resData.map((row: any) =>
-    dimensions.map(d => String(row[getDisplayName(d)] ?? '')).join(' - ')
+    dimensions.map(d => toSafeCategoryValue(row[getDisplayName(d)])).join(' - ')
   );
 
   const series = metrics.map(m => {

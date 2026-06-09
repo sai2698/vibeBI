@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronUp, ChevronDown, ArrowUpDown, Layers, X, Filter } from 'lucide-react';
 import { createChartConfigSchema, type ChartConfigSchema, getConfigValue } from './config-schema';
+import { toSafeCategoryValue, displayCategoryValue } from '../../../utils/chartUtils';
 
 export interface DataTableChartProps {
   categories?: string[];
@@ -725,8 +726,9 @@ export const DataTableChart: React.FC<DataTableChartProps> = ({
                   className={`pivot-row-${(stripeRows && isEven) ? 'even' : 'odd'} ${hoverHighlight ? 'hover:bg-black/[0.03]' : ''} transition-colors group`}
                 >
                   {visibleDimensions.map((d, colIdx) => {
-                    const cellVal = String(d.data?.[rowIdx] ?? '');
+                    const cellVal = toSafeCategoryValue(d.data?.[rowIdx]);
                     const isSelected = selectedCells.get(d.name)?.has(cellVal);
+                    const isSentinel = cellVal === '__NULL__' || cellVal === '__EMPTY__';
                     return (
                       <td
                         key={`dim-val-${colIdx}`}
@@ -738,21 +740,29 @@ export const DataTableChart: React.FC<DataTableChartProps> = ({
                         onClick={(e) => handleCellClick(e, d.name, cellVal)}
                         onContextMenu={(e) => onDrillContextMenu?.(e, cellVal, d.name)}
                       >
-                        {cellVal || '-'}
+                        {isSentinel ? (
+                          <span className="italic text-slate-400 font-normal">{displayCategoryValue(cellVal)}</span>
+                        ) : (
+                          cellVal || '-'
+                        )}
                       </td>
                     );
                   })}
                   {showDimensionCol && (
                     <td
-                      className={`px-3 py-1.5 font-bold whitespace-nowrap border-r cursor-pointer transition-colors ${selectedCells.get('Dimension')?.has(String(categories?.[rowIdx] ?? '')) ? 'pivot-cell--selected' : ''}`}
+                      className={`px-3 py-1.5 font-bold whitespace-nowrap border-r cursor-pointer transition-colors ${selectedCells.get('Dimension')?.has(toSafeCategoryValue(categories?.[rowIdx])) ? 'pivot-cell--selected' : ''}`}
                       style={{
                         color: themeMeta?.text || '#1e293b',
                         borderColor: themeMeta?.border || borderColor || '#e2e8f0',
                       }}
-                      onClick={(e) => handleCellClick(e, 'Dimension', String(categories?.[rowIdx] ?? ''))}
-                      onContextMenu={(e) => onDrillContextMenu?.(e, String(categories?.[rowIdx] ?? ''), 'Dimension')}
+                      onClick={(e) => handleCellClick(e, 'Dimension', toSafeCategoryValue(categories?.[rowIdx]))}
+                      onContextMenu={(e) => onDrillContextMenu?.(e, toSafeCategoryValue(categories?.[rowIdx]), 'Dimension')}
                     >
-                      {categories?.[rowIdx] ?? '-'}
+                      {(toSafeCategoryValue(categories?.[rowIdx]) === '__NULL__' || toSafeCategoryValue(categories?.[rowIdx]) === '__EMPTY__') ? (
+                        <span className="italic text-slate-400 font-normal">{displayCategoryValue(toSafeCategoryValue(categories?.[rowIdx]))}</span>
+                      ) : (
+                        toSafeCategoryValue(categories?.[rowIdx]) || '-'
+                      )}
                     </td>
                   )}
                   {visibleSeries.map((s, colIdx) => {

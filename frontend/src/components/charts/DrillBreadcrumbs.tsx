@@ -10,6 +10,14 @@ interface DrillBreadcrumbsProps {
   onRemoveFilterValue?: (levelIndex: number, valueToRemove?: string) => void;
 }
 
+/** Convert sentinel values to user-friendly display text */
+const displaySentinel = (v: string): string => {
+  const clean = v.replace('__EXCLUDE__', '');
+  if (clean === '__NULL__') return '(No Value)';
+  if (clean === '__EMPTY__') return '(Empty)';
+  return clean;
+};
+
 const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
   drillStack,
   originalDimensionLabel = 'All',
@@ -103,11 +111,10 @@ const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
                           
                           <div className="max-h-48 overflow-y-auto custom-scrollbar py-1">
                             {(level.filterValue as string[]).map((val: string, vIdx: number) => {
-                              const cleanVal = String(val).replace('__EXCLUDE__', '');
                               return (
                                 <div key={vIdx} className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50 group">
-                                  <span className="text-xs text-slate-700 truncate mr-2" title={cleanVal}>
-                                    {cleanVal}
+                                  <span className="text-xs text-slate-700 truncate mr-2" title={displaySentinel(String(val))}>
+                                    {displaySentinel(String(val))}
                                   </span>
                                   <button
                                     onClick={(e) => {
@@ -147,7 +154,7 @@ const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
                     >
                       <span className="text-[10px] font-semibold text-brand/60 uppercase tracking-wide">{level.filterColumn}:</span>
                       <span>
-                        {String(level.filterValue).replace('__EXCLUDE__', '≠ ')}
+                        {displaySentinel(String(level.filterValue))}
                       </span>
                     </button>
                   )}

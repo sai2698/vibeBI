@@ -8,6 +8,7 @@ import DrillContextMenu from './DrillContextMenu';
 import toast from 'react-hot-toast';
 import type { DrillMenuClickInfo } from './DrillContextMenu';
 import type { DrillLevel } from './useDrillDown';
+import { displayCategoryValue, toSentinelValue } from '../../utils/chartUtils';
 
 // Chart type builders
 import {
@@ -950,10 +951,40 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
         // We trigger the brush programmatically from the DrillContextMenu.
       }
 
-      return {
+      // Post-process: convert sentinel values (__NULL__, __EMPTY__) to display labels
+      // in axis data and series names so charts show '(No Value)' / '(Empty)'
+      const opt: any = {
         ...baseOpt,
         backgroundColor: visualConfig?.backgroundColor || themeMeta?.background || '#fff',
       };
+
+      // Convert axis category data sentinels to display-friendly labels
+      const convertAxisData = (axis: any) => {
+        if (!axis) return;
+        const axes = Array.isArray(axis) ? axis : [axis];
+        axes.forEach((a: any) => {
+          if (a.data && Array.isArray(a.data)) {
+            a.data = a.data.map((v: any) => displayCategoryValue(String(v)));
+          }
+        });
+      };
+      convertAxisData(opt.xAxis);
+      convertAxisData(opt.yAxis);
+
+      // Convert pie/donut/funnel/treemap/sunburst series data names
+      if (opt.series && Array.isArray(opt.series)) {
+        opt.series.forEach((s: any) => {
+          if (s.data && Array.isArray(s.data)) {
+            s.data.forEach((d: any) => {
+              if (d && typeof d === 'object' && d.name) {
+                d.name = displayCategoryValue(String(d.name));
+              }
+            });
+          }
+        });
+      }
+
+      return opt;
     } catch (err) {
       console.error('[EChartWrapper] buildOption failed:', err);
       // Return a minimal valid option so ECharts doesn't crash
@@ -1033,15 +1064,15 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             currentDimension={currentDimensionName}
             canDrillUp={(drillStack?.length ?? 0) > 0}
             onDrillDown={(targetCol) => {
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, toSentinelValue(drillMenu.info.categoryValue));
             }}
             onDrillUp={() => onDrillUp?.()}
             onFilterByValue={() => {
-              onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              onFilterByValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
               if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
             }}
             onExcludeValue={() => {
-              onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              onExcludeValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
               if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
             }}
             onSelectMultipleValues={() => {
@@ -1128,15 +1159,15 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             currentDimension={currentDimensionName}
             canDrillUp={(drillStack?.length ?? 0) > 0}
             onDrillDown={(targetCol) => {
-              onDrillDown?.(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, toSentinelValue(drillMenu.info.categoryValue));
             }}
             onDrillUp={() => onDrillUp?.()}
             onFilterByValue={() => {
-              onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              onFilterByValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
               if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
             }}
             onExcludeValue={() => {
-              onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+              onExcludeValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
               if (echartsRef.current) echartsRef.current.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
             }}
             onSelectMultipleValues={() => {
@@ -1338,11 +1369,11 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
           currentDimension={currentDimensionName}
           canDrillUp={drillStack.length > 0}
           onDrillDown={(targetCol) => {
-            onDrillDown(drillMenu.info.dimensionName, targetCol, drillMenu.info.categoryValue);
+            onDrillDown(drillMenu.info.dimensionName, targetCol, toSentinelValue(drillMenu.info.categoryValue));
           }}
           onDrillUp={() => onDrillUp?.()}
           onFilterByValue={() => {
-            onFilterByValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+            onFilterByValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
             isPieMultiSelectModeRef.current = false;
             activeBrushSelectionRef.current.clear();
             if (echartsRef.current) {
@@ -1353,7 +1384,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             }
           }}
           onExcludeValue={() => {
-            onExcludeValue?.(drillMenu.info.dimensionName, drillMenu.info.categoryValue);
+            onExcludeValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
             isPieMultiSelectModeRef.current = false;
             activeBrushSelectionRef.current.clear();
             if (echartsRef.current) {

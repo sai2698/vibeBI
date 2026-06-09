@@ -653,7 +653,18 @@ async def get_column_values(
         res_col = next((c for c in df.columns if c.lower() == actual_col.lower()), df.columns[0] if len(df.columns) > 0 else None)
         result_data = []
         if res_col:
-            result_data = df[res_col].dropna().tolist()
+            # Check for NULL and empty string values before dropping them
+            has_nulls = bool(df[res_col].isnull().any())
+            has_empty = bool((df[res_col].astype(str).str.strip() == '').any()) if not df[res_col].isnull().all() else False
+            
+            # Cast all non-null values to strings for type safety
+            result_data = [str(v) for v in df[res_col].dropna().tolist() if str(v).strip() != '']
+            
+            # Append sentinels for NULL and empty string so users can filter for them
+            if has_empty:
+                result_data.append('__EMPTY__')
+            if has_nulls:
+                result_data.append('__NULL__')
             
         if cache_key and cache_ttl:
             await set_cache(cache_key, result_data, cache_ttl)

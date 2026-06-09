@@ -107,6 +107,13 @@ function useItemSelected(store: SelectionStore, item: string): boolean {
 const ITEM_HEIGHT = 34;
 const LIST_HEIGHT = 192; // max-h-48 equivalent
 
+/** Display user-friendly labels for sentinel values */
+const displayFilterValue = (v: string): string => {
+  if (v === '__NULL__') return '(No Value)';
+  if (v === '__EMPTY__') return '(Empty)';
+  return v;
+};
+
 type OptionRowProps = {
   index: number;
   style: React.CSSProperties;
@@ -118,6 +125,7 @@ type OptionRowProps = {
 const OptionRow = React.memo(function OptionRow({ index, style, items, store, onToggle }: OptionRowProps) {
   const option = items[index];
   const selected = useItemSelected(store, option);
+  const isSentinel = option === '__NULL__' || option === '__EMPTY__';
 
   return (
     <div
@@ -132,7 +140,7 @@ const OptionRow = React.memo(function OptionRow({ index, style, items, store, on
       }`}>
         {selected && <Check size={9} strokeWidth={4} />}
       </div>
-      <span className="truncate">{option}</span>
+      <span className={`truncate ${isSentinel ? 'italic text-slate-400' : ''}`}>{displayFilterValue(option)}</span>
     </div>
   );
 });
@@ -514,11 +522,11 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
     if (Array.isArray(filterValue)) {
       const arr = filterValue;
       if (arr.length === 0) return '';
-      if (arr.length === 1) return `: ${arr[0]}`;
-      if (arr.length <= 3) return `: ${arr.join(', ')}`;
-      return `: ${arr[0]}, ${arr[1]}, ... (${arr.length} selected)`;
+      if (arr.length === 1) return `: ${displayFilterValue(arr[0])}`;
+      if (arr.length <= 3) return `: ${arr.map(displayFilterValue).join(', ')}`;
+      return `: ${displayFilterValue(arr[0])}, ${displayFilterValue(arr[1])}, ... (${arr.length} selected)`;
     }
-    return `: ${filterValue}`;
+    return `: ${displayFilterValue(filterValue)}`;
   }, [filterValue, hasValue]);
 
   return (

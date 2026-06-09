@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, ArrowUpDown, Layers, X, Filter, Table, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { createChartConfigSchema, type ChartConfigSchema, getConfigValue } from './config-schema';
+import { toSafeCategoryValue, displayCategoryValue } from '../../../utils/chartUtils';
 
 export interface PivotTableChartProps {
   categories?: string[];
@@ -48,8 +49,8 @@ export interface PivotTableChartProps {
     colors?: string[];
   };
   onDrillDown?: (fromDimension: string, toDimension: string, clickedValue: string | string[]) => void;
-  onFilterByValue?: (column: string, value: string | string[]) => void;
-  onExcludeValue?: (column: string, value: string | string[]) => void;
+  onFilterByValue?: (column: string | Record<string, string[]>, value?: string | string[]) => void;
+  onExcludeValue?: (column: string | Record<string, string[]>, value?: string | string[]) => void;
   availableColumns?: string[];
   currentDimensionName?: string;
 }
@@ -495,8 +496,8 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
 
     for (let rIdx = 0; rIdx < rowCount; rIdx++) {
       const rowPath = dimensions && dimensions.length > 0 
-        ? dimensions.map(d => String(d.data?.[rIdx] ?? ''))
-        : [categories?.[rIdx] ?? `Row ${rIdx + 1}`];
+        ? dimensions.map(d => toSafeCategoryValue(d.data?.[rIdx]))
+        : [categories?.[rIdx] !== undefined ? toSafeCategoryValue(categories?.[rIdx]) : `Row ${rIdx + 1}`];
       
       const rKey = rowPath.join('|||');
       let current: any = tree;
@@ -1226,7 +1227,9 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
                             {cell.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                           </button>
                         )}
-                        <span className="truncate">{cell.label}</span>
+                        <span className={`truncate ${(cell.label === '__NULL__' || cell.label === '__EMPTY__') ? 'italic text-slate-400 font-normal' : ''}`}>
+                          {displayCategoryValue(cell.label)}
+                        </span>
                       </div>
                     </td>
                   );
