@@ -52,7 +52,7 @@ const SemanticLayerPage: React.FC = () => {
   const activeLOB = useLOBStore((state: any) => state.activeLOB);
 
   const { data: datasets = [] } = useQuery<Dataset[]>({
-    queryKey: ['datasets', activeLOB?.id],
+    queryKey: ['datasets', 'list', activeLOB?.id],
     queryFn: async () => { const r = await api.get('/api/datasets/', { params: { lob_id: activeLOB?.id } }); return r.data; },
   });
 
@@ -62,7 +62,7 @@ const SemanticLayerPage: React.FC = () => {
   });
 
   const { data: rawDataset, isLoading: isDatasetLoading, isError: isDatasetError, error: datasetError } = useQuery<Dataset>({
-    queryKey: ['datasets', selectedDatasetId],
+    queryKey: ['datasets', 'detail', selectedDatasetId],
     queryFn: async () => { const r = await api.get(`/api/datasets/${selectedDatasetId}`); return r.data; },
     enabled: !!selectedDatasetId,
   });
@@ -83,7 +83,7 @@ const SemanticLayerPage: React.FC = () => {
     mutationFn: (id: number) => api.post(`/api/datasets/${id}/refresh`),
     onSuccess: (_, id) => { 
       queryClient.invalidateQueries({ queryKey: ['datasets'] }); 
-      queryClient.invalidateQueries({ queryKey: ['datasets', id] });
+      queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', id] });
       toast.success('Schema refreshed'); 
     },
     onError: () => toast.error('Refresh failed')
@@ -93,7 +93,7 @@ const SemanticLayerPage: React.FC = () => {
     mutationFn: (data: { id: number, description: string }) => api.patch(`/api/datasets/${data.id}`, { description: data.description }),
     onSuccess: () => { 
       queryClient.invalidateQueries({ queryKey: ['datasets'] }); 
-      queryClient.invalidateQueries({ queryKey: ['datasets', selectedDatasetId] });
+      queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', selectedDatasetId] });
       toast.success('Dataset saved'); 
     },
     onError: () => toast.error('Failed to save dataset')
