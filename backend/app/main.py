@@ -19,6 +19,7 @@ from app.chart_folders.router import router as chart_folders_router
 from app.datamarts.router import router as datamarts_router
 from app.rls.router import router as rls_router
 from app.audit.router import router as audit_router
+from app.openmetadata.router import router as openmetadata_router
 
 
 from contextlib import asynccontextmanager
@@ -70,3 +71,4 @@ app.include_router(chart_folders_router)
 app.include_router(datamarts_router, prefix="/api/datamarts", tags=["Data Marts"])
 app.include_router(rls_router)
 app.include_router(audit_router)
+app.include_router(openmetadata_router)
