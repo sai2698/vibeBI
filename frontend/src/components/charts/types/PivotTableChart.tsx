@@ -1216,17 +1216,6 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
                       }}
                     >
                       <div className="pivot-row-header-content">
-                        {cell.isGroupHeader && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleGroup(cell.groupKey!);
-                            }}
-                            className="pivot-group-toggle"
-                          >
-                            {cell.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                          </button>
-                        )}
                         <span className={`truncate ${(cell.label === '__NULL__' || cell.label === '__EMPTY__') ? 'italic text-slate-400 font-normal' : ''}`}>
                           {displayCategoryValue(cell.label)}
                         </span>
