@@ -330,7 +330,7 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
     >
       {/* Loading Overlay (Centered) */}
       {(isLoading || isFetching) && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950 transition-all duration-300">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950 transition-all duration-300 pointer-events-none">
           <LoadingAnimation small={isFetching && !isLoading} />
         </div>
       )}
