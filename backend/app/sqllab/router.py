@@ -64,7 +64,9 @@ async def execute_sql(
             from app.charts.utils import deduplicate_dataframe_columns
             df = deduplicate_dataframe_columns(df)
             columns = df.columns.tolist()
-            rows = df.where(pd.notnull(df), None).to_dict(orient="records")
+            import numpy as np
+            df.replace([np.inf, -np.inf, np.nan, pd.NaT], None, inplace=True)
+            rows = df.to_dict(orient="records")
         else:
             # For DDL/DML, execute in thread pool
             raw_query = request.query

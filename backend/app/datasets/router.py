@@ -455,6 +455,8 @@ async def preview_dataset(
         df = await run_in_threadpool(pd.read_sql_query, text(query_str), engine)
         from app.charts.utils import deduplicate_dataframe_columns
         df = deduplicate_dataframe_columns(df)
+        import numpy as np
+        df.replace([np.inf, -np.inf, np.nan, pd.NaT], None, inplace=True)
         return {
             "columns": list(df.columns),
             "data": df.to_dict(orient="records"),
@@ -494,7 +496,7 @@ async def preview_dataflow(
         df = deduplicate_dataframe_columns(df)
         
         import numpy as np
-        df.replace([np.inf, -np.inf, np.nan], None, inplace=True)
+        df.replace([np.inf, -np.inf, np.nan, pd.NaT], None, inplace=True)
         
         return {
             "compiled_sql": compiled_sql,
@@ -547,9 +549,13 @@ async def profile_dataset(
                 "sample_values": [str(v) for v in df[col].dropna().unique()[:5]]
             }
             if df[col].dtype in ['int64', 'float64', 'int32', 'float32']:
-                col_profile["min"] = float(df[col].min()) if not df[col].isnull().all() else None
-                col_profile["max"] = float(df[col].max()) if not df[col].isnull().all() else None
-                col_profile["mean"] = round(float(df[col].mean()), 2) if not df[col].isnull().all() else None
+                import math
+                min_val = df[col].min() if not df[col].isnull().all() else None
+                max_val = df[col].max() if not df[col].isnull().all() else None
+                mean_val = df[col].mean() if not df[col].isnull().all() else None
+                col_profile["min"] = float(min_val) if min_val is not None and math.isfinite(float(min_val)) else None
+                col_profile["max"] = float(max_val) if max_val is not None and math.isfinite(float(max_val)) else None
+                col_profile["mean"] = round(float(mean_val), 2) if mean_val is not None and math.isfinite(float(mean_val)) else None
             profile[col] = col_profile
         
         return {"total_rows": total_rows, "columns": profile}

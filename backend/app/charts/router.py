@@ -308,7 +308,8 @@ async def get_chart_data(
         
         from .utils import deduplicate_dataframe_columns
         df = deduplicate_dataframe_columns(df)
-        df = df.astype(object).where(pd.notnull(df), None)
+        import numpy as np
+        df.replace([np.inf, -np.inf, np.nan, pd.NaT], None, inplace=True)
         data_list = df.to_dict(orient="records")
         
         # --- AUDIT LOGGING ---
@@ -463,7 +464,8 @@ async def preview_chart_data(
         
         from .utils import deduplicate_dataframe_columns
         df = deduplicate_dataframe_columns(df)
-        df = df.astype(object).where(pd.notnull(df), None)
+        import numpy as np
+        df.replace([np.inf, -np.inf, np.nan, pd.NaT], None, inplace=True)
         data_list = df.to_dict(orient="records")
         
         # --- AUDIT LOGGING ---
