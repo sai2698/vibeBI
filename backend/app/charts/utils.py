@@ -144,21 +144,21 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                 return ""
                 
             if rule_op == "IN" and isinstance(value, list):
-                vals = ", ".join([f"'{escape_sql_string(v)}'" if isinstance(v, str) else str(v) for v in value])
+                vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in value])
                 return f"{col_expr} IN ({vals})"
             elif rule_op == "NOT_IN" and isinstance(value, list):
-                vals = ", ".join([f"'{escape_sql_string(v)}'" if isinstance(v, str) else str(v) for v in value])
+                vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in value])
                 return f"{col_expr} NOT IN ({vals})"
             elif rule_op == "EQUALS":
-                return f"{col_expr} = '{escape_sql_string(value)}'" if isinstance(value, str) else f"{col_expr} = {value}"
+                return f"{col_expr} = '{escape_sql_string(str(value))}'"
             elif rule_op == "NOT_EQUALS":
-                return f"{col_expr} != '{escape_sql_string(value)}'" if isinstance(value, str) else f"{col_expr} != {value}"
+                return f"{col_expr} != '{escape_sql_string(str(value))}'"
             else:
                 if isinstance(value, list):
-                    vals = ", ".join([f"'{escape_sql_string(v)}'" if isinstance(v, str) else str(v) for v in value])
+                    vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in value])
                     return f"{col_expr} IN ({vals})"
                 else:
-                    return f"{col_expr} = '{escape_sql_string(value)}'" if isinstance(value, str) else f"{col_expr} = {value}"
+                    return f"{col_expr} = '{escape_sql_string(str(value))}'"
                     
         return ""
 
@@ -268,10 +268,10 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                         
                         if len(includes) == 1:
                             v = includes[0]
-                            val_str = f"'{escape_sql_string(v)}'" if isinstance(v, str) else str(v)
+                            val_str = f"'{escape_sql_string(str(v))}'"
                             item_conds.append(f"{col_expr_inc} = {val_str}")
                         else:
-                            vals = ", ".join([f"'{escape_sql_string(v)}'" if isinstance(v, str) else str(v) for v in includes])
+                            vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in includes])
                             item_conds.append(f"{col_expr_inc} IN ({vals})")
                             
                     if excludes:
@@ -282,10 +282,10 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                         
                         if len(excludes) == 1:
                             v = excludes[0]
-                            val_str = f"'{escape_sql_string(v)}'" if isinstance(v, str) else str(v)
+                            val_str = f"'{escape_sql_string(str(v))}'"
                             item_conds.append(f"{col_expr_exc} != {val_str}")
                         else:
-                            vals = ", ".join([f"'{escape_sql_string(v)}'" if isinstance(v, str) else str(v) for v in excludes])
+                            vals = ", ".join([f"'{escape_sql_string(str(v))}'" for v in excludes])
                             item_conds.append(f"{col_expr_exc} NOT IN ({vals})")
                             
                     if item_conds:

@@ -239,10 +239,10 @@ export const FilterSelectDropdown: React.FC<FilterSelectDropdownProps> = ({
   const prevOptionsRef = useRef<string[]>(options);
   if (prevOptionsRef.current !== options) {
     prevOptionsRef.current = options;
-    lowercasedRef.current = options.map(o => o.toLowerCase());
+    lowercasedRef.current = options.map(o => String(o).toLowerCase());
   }
   if (lowercasedRef.current.length === 0 && options.length > 0) {
-    lowercasedRef.current = options.map(o => o.toLowerCase());
+    lowercasedRef.current = options.map(o => String(o).toLowerCase());
   }
 
   const filterCacheRef = useRef<Map<string, string[]>>(new Map());
