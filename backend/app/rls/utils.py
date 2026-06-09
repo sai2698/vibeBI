@@ -51,7 +51,7 @@ async def get_applicable_rls_clauses(
                 rendered_clause = template.render(current_user=current_user)
                 if rendered_clause.strip():
                     # Adapt ANSI double quotes to engine specific identifier quotes
-                    if "mysql" in engine_type.lower():
+                    if "mysql" in engine_type.lower() or "starrocks" in engine_type.lower():
                         rendered_clause = rendered_clause.replace('"', '`')
                     
                     for ds in rule.datasets:

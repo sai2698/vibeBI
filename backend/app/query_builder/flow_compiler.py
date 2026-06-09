@@ -147,7 +147,7 @@ async def compile_flow_to_sql(db: AsyncSession, flow_config: Dict[str, Any], eng
             else:
                 join_condition = data.get('join_condition', '1=1')
                 
-            if "mysql" in engine_type.lower():
+            if "mysql" in engine_type.lower() or "starrocks" in engine_type.lower():
                 join_condition = join_condition.replace('"', '`')
             
             # Store join info for SQL generation

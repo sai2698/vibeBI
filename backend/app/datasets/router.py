@@ -625,7 +625,7 @@ async def get_column_values(
         
         # Build discovery query for unique values
         is_oracle = "oracle" in datasource.engine.lower()
-        is_mysql = "mysql" in datasource.engine.lower()
+        is_mysql = "mysql" in datasource.engine.lower() or "starrocks" in datasource.engine.lower()
         alias_keyword = "" if is_oracle else "AS "
         
         # Dialect-specific column identifier

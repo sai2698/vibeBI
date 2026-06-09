@@ -73,7 +73,8 @@ export const DatasourceFormModal: React.FC<DatasourceFormModalProps> = ({ isOpen
             setValue('host', match[3]);
             
             let defaultPort = '5432';
-            if (['mysql', 'starrocks'].includes(editingDatasource.engine.toLowerCase())) defaultPort = '3306';
+            if (editingDatasource.engine.toLowerCase() === 'mysql') defaultPort = '3306';
+            else if (editingDatasource.engine.toLowerCase() === 'starrocks') defaultPort = '9030';
             else if (editingDatasource.engine.toLowerCase() === 'oracle') defaultPort = '1521';
             else if (editingDatasource.engine.toLowerCase() === 'trino') defaultPort = '8080';
             else if (editingDatasource.engine.toLowerCase() === 'presto') defaultPort = '8080';
@@ -151,8 +152,10 @@ export const DatasourceFormModal: React.FC<DatasourceFormModalProps> = ({ isOpen
     
     if (engine === 'postgres') {
       driver = 'postgresql+asyncpg';
-    } else if (engine === 'mysql' || engine === 'starrocks') {
+    } else if (engine === 'mysql') {
       driver = 'mysql+aiomysql';
+    } else if (engine === 'starrocks') {
+      driver = 'starrocks+asyncmy';
     } else if (engine === 'oracle') {
       driver = 'oracle+oracledb';
       suffix = `/?service_name=${data.database}`;
@@ -335,7 +338,7 @@ export const DatasourceFormModal: React.FC<DatasourceFormModalProps> = ({ isOpen
                       <span className="text-sm font-medium text-slate-700">Enable User Impersonation</span>
                       <span className="text-xs text-slate-500">
                         When executing queries, connect to the database using the logged-in user's identity instead of the service account.
-                        Supported on Trino, Presto, Hive, and Spark SQL.
+                        Supported on Trino, Presto, Hive, Spark SQL, and StarRocks.
                       </span>
                     </div>
                   </label>

@@ -812,6 +812,8 @@ def get_sync_uri(uri: str) -> str:
         return uri.replace("+asyncpg", "")
     elif "+aiomysql" in uri:
         return uri.replace("+aiomysql", "+pymysql")
+    elif "+asyncmy" in uri:
+        return uri.replace("+asyncmy", "")
     elif "oracle" in uri and "+oracledb" not in uri:
         return uri.replace("oracle://", "oracle+oracledb://")
     return uri
@@ -853,13 +855,14 @@ def deduplicate_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
 def get_quoted_table_ref(schema: str, table: str, engine_type: str) -> str:
     """Returns a dialect-aware quoted table reference (e.g. `schema`.`table` or "schema"."table")."""
     engine_lower = (engine_type or "").lower()
-    if "mysql" in engine_lower:
+    if "mysql" in engine_lower or "starrocks" in engine_lower:
         return f"`{schema}`.`{table}`" if schema else f"`{table}`"
     else:
         return f'"{schema}"."{table}"' if schema else f'"{table}"'
 
 def get_quoted_identifier(ident: str, engine_type: str) -> str:
     """Returns a dialect-aware quoted identifier."""
-    if "mysql" in (engine_type or "").lower():
+    engine_lower = (engine_type or "").lower()
+    if "mysql" in engine_lower or "starrocks" in engine_lower:
         return f"`{ident}`"
     return f'"{ident}"'

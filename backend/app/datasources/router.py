@@ -49,6 +49,14 @@ async def test_datasource_connection(
             
         engine = create_engine(uri, pool_pre_ping=True, connect_args=connect_args)
         
+        if impersonate and "starrocks" in uri.lower():
+            from sqlalchemy import event
+            @event.listens_for(engine, "connect")
+            def impersonate_session(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute(f"EXECUTE AS '{current_user.email}' WITH NO REVERT")
+                cursor.close()
+        
         def _test_connection():
             with engine.connect() as conn:
                 pass
