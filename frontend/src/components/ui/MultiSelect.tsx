@@ -45,12 +45,12 @@ function createSelectionStore(initial: string[]) {
     let cbs = itemListeners.get(item);
     if (!cbs) { cbs = new Set(); itemListeners.set(item, cbs); }
     cbs.add(cb);
-    return () => cbs!.delete(cb);
+    return () => { cbs!.delete(cb); };
   }
 
   function subscribeGlobal(cb: () => void) {
     globalListeners.add(cb);
-    return () => globalListeners.delete(cb);
+    return () => { globalListeners.delete(cb); };
   }
 
   function notifyItem(item: string) {
@@ -191,6 +191,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
   // -------------------------------------------------------------------------
   const dropdownRef = useRef<HTMLDivElement>(null);
   const chevronRef = useRef<SVGSVGElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const isOpenRef = useRef(false);
 
   const openDropdown = useCallback(() => {
@@ -200,6 +201,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
     el.classList.remove("opacity-0", "-translate-y-1", "pointer-events-none");
     el.classList.add("opacity-100", "translate-y-0", "pointer-events-auto");
     el.removeAttribute("aria-hidden");
+    el.removeAttribute("inert");
     chevronRef.current?.classList.add("rotate-180");
     // Focus search input
     requestAnimationFrame(() => {
@@ -211,9 +213,16 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
     isOpenRef.current = false;
     const el = dropdownRef.current;
     if (!el) return;
+
+    if (document.activeElement && el.contains(document.activeElement)) {
+      (document.activeElement as HTMLElement).blur();
+      triggerRef.current?.focus();
+    }
+
     el.classList.remove("opacity-100", "translate-y-0", "pointer-events-auto");
     el.classList.add("opacity-0", "-translate-y-1", "pointer-events-none");
     el.setAttribute("aria-hidden", "true");
+    el.setAttribute("inert", "");
     chevronRef.current?.classList.remove("rotate-180");
   }, []);
 
@@ -379,6 +388,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
       {/* Trigger button — selectedCount state updates cause re-render here,
           but that only happens on selection change, never on open/close */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={toggleOpen}
         className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium hover:border-brand/40 transition-colors min-w-[160px] shadow-sm active:scale-[0.98]"
@@ -409,6 +419,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
       <div
         ref={dropdownRef}
         aria-hidden="true"
+        inert={true}
         className="absolute left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden transition-[opacity,transform] duration-150 ease-out opacity-0 -translate-y-1 pointer-events-none"
       >
         <div className="p-3 border-b border-slate-100 bg-slate-50/50">

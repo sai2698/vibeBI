@@ -471,6 +471,7 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const chevronRef = useRef<SVGSVGElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const isOpenRef = useRef(false);
 
   const openDropdown = useCallback(() => {
@@ -481,6 +482,7 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
     el.classList.remove('opacity-0', '-translate-y-1', 'pointer-events-none');
     el.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
     el.removeAttribute('aria-hidden');
+    el.removeAttribute('inert');
     if (bd) bd.classList.remove('hidden');
     chevronRef.current?.classList.add('rotate-180');
     requestAnimationFrame(() => {
@@ -493,9 +495,16 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
     const el = dropdownRef.current;
     const bd = backdropRef.current;
     if (!el) return;
+
+    if (document.activeElement && el.contains(document.activeElement)) {
+      (document.activeElement as HTMLElement).blur();
+      triggerRef.current?.focus();
+    }
+
     el.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
     el.classList.add('opacity-0', '-translate-y-1', 'pointer-events-none');
     el.setAttribute('aria-hidden', 'true');
+    el.setAttribute('inert', '');
     if (bd) bd.classList.add('hidden');
     chevronRef.current?.classList.remove('rotate-180');
   }, []);
@@ -540,6 +549,7 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
 
       {/* Trigger button */}
       <button
+        ref={triggerRef}
         onClick={handleTriggerClick}
         className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-bold h-9 ${
           hasValue
@@ -566,6 +576,7 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
       <div
         ref={dropdownRef}
         aria-hidden="true"
+        inert={true}
         className={`${
           isMobile
             ? 'fixed inset-x-4 top-[20%] mx-auto max-w-[340px] shadow-2xl'
