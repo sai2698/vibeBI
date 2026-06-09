@@ -657,8 +657,20 @@ async def get_column_values(
             has_nulls = bool(df[res_col].isnull().any())
             has_empty = bool((df[res_col].astype(str).str.strip() == '').any()) if not df[res_col].isnull().all() else False
             
-            # Cast all non-null values to strings for type safety
-            result_data = [str(v) for v in df[res_col].dropna().tolist() if str(v).strip() != '']
+            # Cast all non-null values to strings for type safety, stripping trailing .0 from whole floats
+            is_numeric = pd.api.types.is_numeric_dtype(df[res_col])
+            result_data = []
+            for v in df[res_col].dropna().tolist():
+                s = str(v)
+                if is_numeric:
+                    try:
+                        val_float = float(v)
+                        if val_float.is_integer():
+                            s = str(int(val_float))
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+                if s.strip() != '':
+                    result_data.append(s)
             
             # Append sentinels for NULL and empty string so users can filter for them
             if has_empty:
