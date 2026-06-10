@@ -62,7 +62,7 @@ class GroupResponse(GroupBase):
 
 # --- Users ---
 class UserBase(BaseModel):
-    email: EmailStr
+    email: str
     full_name: Optional[str] = None
     is_active: Optional[bool] = True
 
@@ -71,7 +71,7 @@ class UserCreate(UserBase):
     group_ids: List[int] = []
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     full_name: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None

@@ -224,14 +224,14 @@ const UserManagementPage: React.FC = () => {
             
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Username / Email Address</label>
                 <input
-                  type="email"
-                  {...register('email', { required: 'Email is required' })}
+                  type="text"
+                  {...register('email', { required: 'Username or Email is required' })}
                   className={`w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-4 focus:ring-brand/10 transition-all text-sm font-medium dark:text-slate-100 ${
                     errors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-brand'
                   }`}
-                  placeholder="user@example.com"
+                  placeholder="username or user@example.com"
                 />
                 {errors.email && <p className="mt-1.5 text-xs text-red-500 font-medium ml-1">{errors.email.message}</p>}
               </div>

@@ -373,17 +373,17 @@ const LoginPage: React.FC = () => {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider ml-1">Work Email</label>
+              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider ml-1">Username / Email</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand transition-colors">
                   <Mail size={18} />
                 </div>
                 <input
-                  type="email"
+                  type="text"
                   required
                   autoFocus
                   className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 text-sm font-medium focus:ring-4 focus:ring-brand/10 focus:border-brand focus:bg-white transition-all outline-none"
-                  placeholder="name@company.com"
+                  placeholder="username or name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onFocus={() => setError('')}
