@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api';
-import { Plus, LayoutDashboard, Star, Clock, Trash2, Edit2, X, Search } from 'lucide-react';
+import { Plus, LayoutDashboard, Star, Clock, Trash2, Edit2, X, Search, LayoutGrid, List } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useLOBStore } from '../../store/useLOBStore';
 import DeleteConfirmationModal from '../../components/ui/DeleteConfirmationModal';
@@ -144,6 +144,7 @@ const DashboardListPage: React.FC = () => {
   };
   const [activeTab, setActiveTab] = useState<'home' | 'all'>('home');
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const filteredDashboards = dashboards?.filter(d =>
     d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -168,6 +169,23 @@ const DashboardListPage: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-slate-700 text-brand shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                title="Grid View"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-brand shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                title="List View"
+              >
+                <List size={16} />
+              </button>
+            </div>
+
             <div className="relative group">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-brand transition-colors" />
               <input
@@ -178,6 +196,7 @@ const DashboardListPage: React.FC = () => {
                 className="pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-brand/20 w-full sm:w-64 transition-all focus:bg-white dark:focus:bg-slate-900 focus:shadow-sm text-slate-900 dark:text-slate-100"
               />
             </div>
+
             <button
               onClick={() => {
                 if (!activeLOB) {
@@ -230,41 +249,86 @@ const DashboardListPage: React.FC = () => {
               <h2 className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-2">
                 <Star size={14} className="text-amber-500" /> Featured Dashboards
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredDashboards?.filter(d => d.is_featured).length === 0 ? (
-                  <div className="col-span-full py-8 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-sm">
-                    No featured dashboards match your search.
-                  </div>
-                ) : (
-                  filteredDashboards?.filter(d => d.is_featured).map((dash) => (
+              {viewMode === 'list' ? (
+                <div className="space-y-3">
+                  {filteredDashboards?.filter(d => d.is_featured).length === 0 ? (
+                    <div className="py-8 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-sm">
+                      No featured dashboards match your search.
+                    </div>
+                  ) : (
+                    filteredDashboards?.filter(d => d.is_featured).map((dash) => (
                       <div
                         key={dash.id}
                         onClick={() => navigate(`/dashboards/${dash.id}`)}
-                        className="card group hover:shadow-md transition-all cursor-pointer dark:bg-slate-900 dark:border-slate-800"
+                        className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-brand/20 dark:hover:border-brand/40 hover:shadow-sm cursor-pointer transition-all group/recent"
                       >
-                        <div className="aspect-video bg-slate-50 dark:bg-slate-800/50 rounded-lg mb-4 border border-slate-100 dark:border-slate-700 flex items-center justify-center group-hover:border-brand/20 transition-colors relative">
-                          <LayoutDashboard size={32} className="text-slate-200 dark:text-slate-700 group-hover:text-brand/20 transition-colors" />
-                          <div className="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => toggleFavorite(e, dash.id)}
-                              className="p-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-all transform active:scale-90"
-                            >
-                              <Star size={14} className={dash.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-slate-300 dark:text-slate-600'} />
-                            </button>
-                            <button
-                              onClick={(e) => handleDelete(e, dash.id)}
-                              className="p-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-all transform active:scale-90"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500">
+                            <Star size={18} className="fill-amber-500" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-900 dark:text-white">{dash.title}</div>
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-1">{dash.description || 'No description'}</div>
                           </div>
                         </div>
-                        <h3 className="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-brand">{dash.title}</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{dash.description}</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => toggleFavorite(e, dash.id)}
+                            className="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all opacity-0 group-hover/recent:opacity-100"
+                          >
+                            <Star size={14} className={dash.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-slate-300 dark:text-slate-600'} />
+                          </button>
+                          <button
+                            onClick={(e) => handleDelete(e, dash.id)}
+                            className="p-1.5 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg opacity-0 group-hover/recent:opacity-100 transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {filteredDashboards?.filter(d => d.is_featured).length === 0 ? (
+                    <div className="col-span-full py-8 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-sm">
+                      No featured dashboards match your search.
+                    </div>
+                  ) : (
+                    filteredDashboards?.filter(d => d.is_featured).map((dash) => (
+                        <div
+                          key={dash.id}
+                          onClick={() => navigate(`/dashboards/${dash.id}`)}
+                          className="card p-4 group hover:shadow-md transition-all cursor-pointer dark:bg-slate-900 dark:border-slate-800 flex flex-col border border-slate-200"
+                        >
+                          <div className="h-24 bg-slate-50 dark:bg-slate-800/50 rounded-lg mb-3 border border-slate-100 dark:border-slate-700 flex items-center justify-center group-hover:border-brand/30 transition-colors relative overflow-hidden">
+                            <LayoutDashboard size={24} className="text-slate-300 dark:text-slate-600 group-hover:text-brand/40 transition-colors z-10" />
+                            <div className="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                              <button
+                                onClick={(e) => toggleFavorite(e, dash.id)}
+                                className="p-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-all transform active:scale-90"
+                              >
+                                <Star size={14} className={dash.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-slate-300 dark:text-slate-600'} />
+                              </button>
+                              <button
+                                onClick={(e) => handleDelete(e, dash.id)}
+                                className="p-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-all transform active:scale-90"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                            <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-brand/5 rounded-full blur-xl group-hover:bg-brand/10 transition-colors"></div>
+                          </div>
+                          <div className="flex-1 flex flex-col">
+                            <h3 className="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-brand line-clamp-1">{dash.title}</h3>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">{dash.description || 'No description'}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                </div>
+              )}
 
                 <h2 className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-2 pt-4">
                 <Clock size={14} className="text-slate-400 dark:text-slate-500" /> Recent Updates
@@ -317,67 +381,125 @@ const DashboardListPage: React.FC = () => {
       ) : (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
           {/* All Dashboards View */}
-          <div className="card dark:bg-slate-900 dark:border-slate-800 overflow-hidden p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left whitespace-nowrap min-w-[600px]">
-              <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase text-xs">
-                <tr>
-                  <th className="px-6 py-4 font-bold tracking-wider">Dashboard Name</th>
-                  <th className="px-6 py-4 font-bold tracking-wider">Visibility</th>
-                  <th className="px-6 py-4 font-bold tracking-wider">Updated</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredDashboards?.length === 0 ? (
+          {/* All Dashboards View */}
+          {viewMode === 'list' ? (
+            <div className="card dark:bg-slate-900 dark:border-slate-800 overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left whitespace-nowrap min-w-[600px]">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase text-[11px] font-bold tracking-wider">
                   <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
-                      No dashboards found matching your search.
-                    </td>
+                    <th className="px-6 py-4">Dashboard Name</th>
+                    <th className="px-6 py-4">Visibility</th>
+                    <th className="px-6 py-4">Updated</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
-                ) : (
-                  filteredDashboards?.map((dash) => (
-                    <tr
-                      key={dash.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/dashboards/${dash.id}`)}
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={(e) => toggleFavorite(e, dash.id)}
-                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-                          >
-                            <Star size={14} className={dash.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-slate-300 dark:text-slate-700'} />
-                          </button>
-                          <div>
-                            <div className="font-bold text-slate-900 dark:text-white">{dash.title}</div>
-                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{dash.description || 'No description'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          {dash.is_public && <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Public</span>}
-                          {dash.is_featured && <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Featured</span>}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 tabular-nums">
-                        {new Date(dash.updated_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-1">
-                          <button onClick={(e) => openEditModal(e, dash)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-brand dark:hover:text-brand hover:bg-brand/5 dark:hover:bg-brand/10 rounded-lg transition-all"><Edit2 size={16} /></button>
-                          <button onClick={(e) => handleDelete(e, dash.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"><Trash2 size={16} /></button>
-                        </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                  {filteredDashboards?.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                        No dashboards found matching your search.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredDashboards?.map((dash) => (
+                      <tr
+                        key={dash.id}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/dashboards/${dash.id}`)}
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={(e) => toggleFavorite(e, dash.id)}
+                              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
+                            >
+                              <Star size={16} className={dash.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-slate-300 dark:text-slate-600'} />
+                            </button>
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center text-brand">
+                                <LayoutDashboard size={14} />
+                              </div>
+                              <div>
+                                <div className="font-semibold text-slate-900 dark:text-slate-100">{dash.title}</div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{dash.description || 'No description'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2">
+                            {dash.is_public && <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase dark:bg-emerald-900/20 dark:border-emerald-800/30 dark:text-emerald-400">Public</span>}
+                            {dash.is_featured && <span className="bg-amber-50 border border-amber-200 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase dark:bg-amber-900/20 dark:border-amber-800/30 dark:text-amber-400">Featured</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400 tabular-nums text-xs font-medium">
+                          {new Date(dash.updated_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-1">
+                            <button onClick={(e) => openEditModal(e, dash)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-brand dark:hover:text-brand hover:bg-brand/5 dark:hover:bg-brand/10 rounded-lg transition-all"><Edit2 size={16} /></button>
+                            <button onClick={(e) => handleDelete(e, dash.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"><Trash2 size={16} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {filteredDashboards?.length === 0 ? (
+                <div className="col-span-full py-12 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-sm">
+                  No dashboards found matching your search.
+                </div>
+              ) : (
+                filteredDashboards?.map((dash) => (
+                  <div
+                    key={dash.id}
+                    onClick={() => navigate(`/dashboards/${dash.id}`)}
+                    className="card p-4 group hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer dark:bg-slate-900 dark:border-slate-800 flex flex-col border border-slate-200"
+                  >
+                    <div className="h-28 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-800/40 rounded-lg mb-3 border border-slate-100 dark:border-slate-700 flex items-center justify-center group-hover:border-brand/30 transition-all relative overflow-hidden">
+                      <LayoutDashboard size={28} className="text-slate-300 dark:text-slate-600 group-hover:text-brand/50 transition-colors z-10 transform group-hover:scale-110 duration-300" />
+                      
+                      <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
+                        <button
+                          onClick={(e) => toggleFavorite(e, dash.id)}
+                          className={`p-1.5 backdrop-blur-sm rounded-md shadow-sm border transition-all ${dash.is_favorite ? 'bg-white/90 border-amber-200 dark:bg-slate-800/90 dark:border-amber-900/50' : 'bg-white/50 border-slate-200 opacity-0 group-hover:opacity-100 dark:bg-slate-800/50 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700'}`}
+                        >
+                          <Star size={14} className={dash.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-slate-400 dark:text-slate-500'} />
+                        </button>
+                      </div>
+                      
+                      {/* Decorative elements */}
+                      <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-brand/5 rounded-full blur-xl group-hover:bg-brand/10 transition-colors"></div>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-brand transition-colors line-clamp-1">{dash.title}</h3>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-3 flex-1">{dash.description || 'No description provided'}</p>
+                      
+                      <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                        <div className="flex items-center gap-1.5">
+                          {dash.is_public && <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border border-emerald-100/50 dark:bg-emerald-900/20 dark:border-emerald-800/30 dark:text-emerald-400">Public</span>}
+                          {dash.is_featured && <span className="bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border border-amber-100/50 dark:bg-amber-900/20 dark:border-amber-800/30 dark:text-amber-400">Featured</span>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button onClick={(e) => openEditModal(e, dash)} className="p-1.5 text-slate-400 hover:text-brand hover:bg-brand/5 rounded-md transition-all opacity-0 group-hover:opacity-100"><Edit2 size={14} /></button>
+                          <button onClick={(e) => handleDelete(e, dash.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100 dark:hover:bg-red-900/30"><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       )}
 
