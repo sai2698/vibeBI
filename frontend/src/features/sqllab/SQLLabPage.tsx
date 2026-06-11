@@ -54,17 +54,17 @@ const makeTab = (): QueryTab => ({
   isRunning: false,
 });
 
-const CustomDropdown = ({ 
-  value, 
-  onChange, 
-  options, 
-  placeholder, 
+const CustomDropdown = ({
+  value,
+  onChange,
+  options,
+  placeholder,
   icon: Icon,
-  isLoading 
-}: { 
-  value: string | number | null, 
-  onChange: (v: any) => void, 
-  options: { value: string | number, label: string }[], 
+  isLoading
+}: {
+  value: string | number | null,
+  onChange: (v: any) => void,
+  options: { value: string | number, label: string }[],
   placeholder: string,
   icon?: React.ElementType,
   isLoading?: boolean
@@ -84,7 +84,7 @@ const CustomDropdown = ({
 
   return (
     <div ref={ref} className="relative w-full group">
-      <button 
+      <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 rounded-lg focus:ring-2 focus:ring-brand/20 hover:border-brand/40 dark:hover:border-brand/40 transition-all"
@@ -110,11 +110,10 @@ const CustomDropdown = ({
             <button
               key={opt.value}
               onClick={() => { onChange(opt.value); setIsOpen(false); }}
-              className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${
-                value === opt.value 
-                  ? 'bg-brand/10 text-brand dark:text-brand' 
+              className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${value === opt.value
+                  ? 'bg-brand/10 text-brand dark:text-brand'
                   : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-              }`}
+                }`}
             >
               {opt.label}
             </button>
@@ -138,7 +137,7 @@ const SQLLabPage: React.FC = () => {
   const [tableColumns, setTableColumns] = useState<Record<string, Column[]>>({});
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
-  
+
   /* Pagination for results */
   const [resultPage, setResultPage] = useState(1);
   const RESULT_PAGE_SIZE = 50;
@@ -146,7 +145,7 @@ const SQLLabPage: React.FC = () => {
   useEffect(() => {
     setResultPage(1);
   }, [activeTabId]);
-  
+
   /* Save Dialog state */
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -155,7 +154,7 @@ const SQLLabPage: React.FC = () => {
   const [editQueryId, setEditQueryId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editFolder, setEditFolder] = useState('');
-  
+
   /* Folder management */
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -165,7 +164,7 @@ const SQLLabPage: React.FC = () => {
   const [editFolderNewName, setEditFolderNewName] = useState('');
   const [createdFolders, setCreatedFolders] = useState<Set<string>>(new Set());
   const [folderSearchQuery, setFolderSearchQuery] = useState('');
-  
+
   /* resizable state */
   const [sidebarW, setSidebarW] = useState(260);
   const [editorH, setEditorH] = useState(45); // percent
@@ -221,19 +220,19 @@ const SQLLabPage: React.FC = () => {
   // Combine API folders with locally created folders
   const folders = useMemo(() => {
     const folderMap = new Map<string, FolderInfo>();
-    
+
     // Add API folders
     apiFolders?.forEach(f => {
       folderMap.set(f.name, f);
     });
-    
+
     // Add locally created folders (even if not in API yet)
     createdFolders.forEach(name => {
       if (!folderMap.has(name)) {
         folderMap.set(name, { name, description: undefined, query_count: 0 });
       }
     });
-    
+
     return Array.from(folderMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [apiFolders, createdFolders]);
 
@@ -316,7 +315,7 @@ const SQLLabPage: React.FC = () => {
   });
 
   const updateQueryMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<SavedQuery> }) => 
+    mutationFn: async ({ id, data }: { id: number; data: Partial<SavedQuery> }) =>
       await api.patch(`/api/sqllab/saved/${id}`, data),
     onSuccess: (responseData) => {
       toast.success('Query updated');
@@ -331,7 +330,7 @@ const SQLLabPage: React.FC = () => {
   });
 
   const renameFolderMutation = useMutation({
-    mutationFn: async ({ oldName, newName }: { oldName: string; newName: string }) => 
+    mutationFn: async ({ oldName, newName }: { oldName: string; newName: string }) =>
       await api.patch('/api/sqllab/folders', { old_name: oldName, new_name: newName }),
     onSuccess: () => {
       toast.success('Folder renamed');
@@ -396,20 +395,20 @@ const SQLLabPage: React.FC = () => {
 
   const addTab = (saved?: SavedQuery) => {
     const t = saved ? {
-        id: `tab-${Date.now()}-${tabCounter++}`,
-        title: saved.name,
-        query: saved.sql,
-        result: null,
-        isRunning: false,
-        savedQueryId: saved.id,
-        folder: saved.folder
+      id: `tab-${Date.now()}-${tabCounter++}`,
+      title: saved.name,
+      query: saved.sql,
+      result: null,
+      isRunning: false,
+      savedQueryId: saved.id,
+      folder: saved.folder
     } : makeTab();
-    
+
     if (saved) {
-        setDatasourceId(saved.datasource_id);
-        setSchema(saved.schema_name || null);
+      setDatasourceId(saved.datasource_id);
+      setSchema(saved.schema_name || null);
     }
-    
+
     setTabs((prev) => [...prev, t]);
     setActiveTabId(t.id);
   };
@@ -503,7 +502,7 @@ const SQLLabPage: React.FC = () => {
     let dialect = StandardSQL;
     if (datasourceId && datasources) {
       const ds = datasources.find((d) => d.id === datasourceId);
-      if (ds?.engine?.toLowerCase().includes('mysql')) {
+      if (ds?.engine?.toLowerCase().includes('mysql') || ds?.engine?.toLowerCase().includes('starrocks')) {
         dialect = MySQL;
       } else if (ds?.engine?.toLowerCase().includes('postgresql')) {
         dialect = PostgreSQL;
@@ -555,12 +554,12 @@ const SQLLabPage: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => {
-                if (activeTab.savedQueryId) {
-                    saveMutation.mutate({ sql: activeTab.query });
-                } else {
-                    setSaveName(activeTab.title);
-                    setIsSaveModalOpen(true);
-                }
+              if (activeTab.savedQueryId) {
+                saveMutation.mutate({ sql: activeTab.query });
+              } else {
+                setSaveName(activeTab.title);
+                setIsSaveModalOpen(true);
+              }
             }}
             disabled={!datasourceId}
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-40"
@@ -571,9 +570,9 @@ const SQLLabPage: React.FC = () => {
           {activeTab.savedQueryId && (
             <button
               onClick={() => {
-                  setSaveName(activeTab.title);
-                  setSaveFolder(activeTab.folder || '');
-                  setIsSaveModalOpen(true);
+                setSaveName(activeTab.title);
+                setSaveFolder(activeTab.folder || '');
+                setIsSaveModalOpen(true);
               }}
               className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-40"
               title="Edit Details"
@@ -599,13 +598,13 @@ const SQLLabPage: React.FC = () => {
         <div className="shrink-0 flex flex-col bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 overflow-hidden" style={{ width: sidebarW }}>
           {/* Sidebar Tabs */}
           <div className="flex p-1.5 gap-1 border-b border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-900/50">
-            <button 
+            <button
               onClick={() => setSidebarTab('db')}
               className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${sidebarTab === 'db' ? 'bg-white dark:bg-slate-800 text-brand shadow-sm border border-slate-200/50 dark:border-slate-700' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border border-transparent hover:bg-slate-200/50 dark:hover:bg-slate-800/50'}`}
             >
               Database
             </button>
-            <button 
+            <button
               onClick={() => setSidebarTab('queries')}
               className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${sidebarTab === 'queries' ? 'bg-white dark:bg-slate-800 text-brand shadow-sm border border-slate-200/50 dark:border-slate-700' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border border-transparent hover:bg-slate-200/50 dark:hover:bg-slate-800/50'}`}
             >
@@ -618,7 +617,7 @@ const SQLLabPage: React.FC = () => {
               {/* Schema Selector */}
               <div className="px-3 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 text-slate-400">
-                   <Layers size={12} className="text-brand" /> Schema
+                  <Layers size={12} className="text-brand" /> Schema
                 </label>
                 <CustomDropdown
                   value={schema}
@@ -641,11 +640,11 @@ const SQLLabPage: React.FC = () => {
                     <RefreshCw size={11} className={isLoadingTables ? 'animate-spin' : ''} />
                   </button>
                 </div>
-                
+
                 {datasourceId && (
                   <div className="relative group">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand transition-colors" />
-                    <input 
+                    <input
                       type="text"
                       placeholder="Search tables..."
                       value={tableSearch}
@@ -703,11 +702,11 @@ const SQLLabPage: React.FC = () => {
                         )}
                       </div>
                     ))}
-                    
+
                     {/* Pagination Controls */}
                     {tableData.total_count > 50 && (
                       <div className="flex items-center justify-between px-2 py-4 border-t border-slate-100 mt-2">
-                        <button 
+                        <button
                           disabled={tablePage === 1}
                           onClick={() => setTablePage(p => p - 1)}
                           className="p-1 text-[10px] font-bold text-slate-400 hover:text-brand disabled:opacity-30 transition-colors flex items-center gap-1"
@@ -717,7 +716,7 @@ const SQLLabPage: React.FC = () => {
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
                           Page {tablePage} of {Math.ceil(tableData.total_count / 50)}
                         </span>
-                        <button 
+                        <button
                           disabled={tablePage >= Math.ceil(tableData.total_count / 50)}
                           onClick={() => setTablePage(p => p + 1)}
                           className="p-1 text-[10px] font-bold text-slate-400 hover:text-brand disabled:opacity-30 transition-colors flex items-center gap-1"
@@ -739,7 +738,7 @@ const SQLLabPage: React.FC = () => {
                     <FolderOpen size={13} className="text-brand" />
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Folders & Queries</span>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setIsCreateFolderModalOpen(true)}
                     className="p-1 text-slate-400 hover:text-brand transition-colors"
                     title="Create Folder"
@@ -751,7 +750,7 @@ const SQLLabPage: React.FC = () => {
                 {/* Search Bar */}
                 <div className="relative group">
                   <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand transition-colors" />
-                  <input 
+                  <input
                     type="text"
                     placeholder="Search folders or queries..."
                     value={folderSearchQuery}
@@ -764,178 +763,178 @@ const SQLLabPage: React.FC = () => {
               {/* Folders and Queries Tree */}
               <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                 {(() => {
-                    const folderGroups: Record<string, SavedQuery[]> = {};
-                    const root: SavedQuery[] = [];
-                    savedQueries?.forEach(q => {
-                        if (q.folder) {
-                            if (!folderGroups[q.folder]) folderGroups[q.folder] = [];
-                            folderGroups[q.folder].push(q);
-                        } else {
-                            root.push(q);
-                        }
-                    });
+                  const folderGroups: Record<string, SavedQuery[]> = {};
+                  const root: SavedQuery[] = [];
+                  savedQueries?.forEach(q => {
+                    if (q.folder) {
+                      if (!folderGroups[q.folder]) folderGroups[q.folder] = [];
+                      folderGroups[q.folder].push(q);
+                    } else {
+                      root.push(q);
+                    }
+                  });
 
-                    const searchLower = folderSearchQuery.toLowerCase();
-                    
-                    // Filter root queries
-                    const filteredRoot = root.filter(q => 
+                  const searchLower = folderSearchQuery.toLowerCase();
+
+                  // Filter root queries
+                  const filteredRoot = root.filter(q =>
+                    q.name.toLowerCase().includes(searchLower)
+                  );
+
+                  // Filter folders - show if folder name matches OR if it has queries that match
+                  const filteredFolders = folders?.filter(f => {
+                    const folderMatches = f.name.toLowerCase().includes(searchLower);
+                    const folderQueries = folderGroups[f.name] || [];
+                    const hasMatchingQueries = folderQueries.some(q =>
                       q.name.toLowerCase().includes(searchLower)
                     );
+                    return folderMatches || hasMatchingQueries;
+                  }) || [];
 
-                    // Filter folders - show if folder name matches OR if it has queries that match
-                    const filteredFolders = folders?.filter(f => {
-                      const folderMatches = f.name.toLowerCase().includes(searchLower);
-                      const folderQueries = folderGroups[f.name] || [];
-                      const hasMatchingQueries = folderQueries.some(q => 
-                        q.name.toLowerCase().includes(searchLower)
-                      );
-                      return folderMatches || hasMatchingQueries;
-                    }) || [];
-
-                    return (
-                        <div className="space-y-1">
-                          {/* Root Level Queries (No Folder) */}
-                          {filteredRoot.length > 0 && (
-                            <div className="space-y-px">
-                              {filteredRoot.map(q => (
-                                <div key={q.id} className="group/item flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm cursor-pointer transition-all" onClick={() => addTab(q)}>
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <FileCode2 size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
-                                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{q.name}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                    <button 
-                                      onClick={(e) => { 
-                                        e.stopPropagation(); 
-                                        setEditQueryId(q.id);
-                                        setEditName(q.name);
-                                        setEditFolder(q.folder || '');
-                                        setIsEditModalOpen(true);
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-brand transition-colors"
-                                    >
-                                      <Edit3 size={11} />
-                                    </button>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); deleteSavedMutation.mutate(q.id); }}
-                                      className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-                                    >
-                                      <Trash2 size={11} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Folders and their queries */}
-                          {filteredFolders.map((folderInfo) => {
-                            const folderQueries = folderGroups[folderInfo.name] || [];
-                            const filteredFolderQueries = folderQueries.filter(q => 
-                              q.name.toLowerCase().includes(searchLower)
-                            );
-                            const isExpanded = expandedFolders[folderInfo.name] ?? true;
-
-                            return (
-                              <div key={folderInfo.name} className="space-y-px">
-                                <button 
-                                  onClick={() => setExpandedFolders(p => ({ ...p, [folderInfo.name]: !isExpanded }))}
-                                  className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <ChevronRight size={13} className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                                    <FolderOpen size={13} className="text-brand/60 group-hover:text-brand transition-colors" />
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{folderInfo.name}</span>
-                                    <span className="text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1 rounded-full font-bold">
-                                      {filteredFolderQueries.length}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditFolderOldName(folderInfo.name);
-                                        setEditFolderNewName(folderInfo.name);
-                                        setIsEditFolderModalOpen(true);
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-brand transition-colors"
-                                      title="Edit folder name"
-                                    >
-                                      <Edit3 size={11} />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFolderToDelete(folderInfo.name);
-                                      }}
-                                      className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-                                      title="Delete folder"
-                                    >
-                                      <Trash2 size={11} />
-                                    </button>
-                                  </div>
-                                </button>
-
-                                {/* Folder Queries - Tree indented */}
-                                {isExpanded && filteredFolderQueries.length > 0 && (
-                                  <div className="ml-4 border-l-2 border-slate-200 dark:border-slate-800 pl-2 space-y-px animate-in slide-in-from-left-1 duration-150">
-                                    {filteredFolderQueries.map(q => (
-                                      <div key={q.id} className="group/item flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm cursor-pointer transition-all" onClick={() => addTab(q)}>
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <FileCode2 size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
-                                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{q.name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                          <button 
-                                            onClick={(e) => { 
-                                              e.stopPropagation(); 
-                                              setEditQueryId(q.id);
-                                              setEditName(q.name);
-                                              setEditFolder(q.folder || '');
-                                              setIsEditModalOpen(true);
-                                            }}
-                                            className="p-1 text-slate-400 hover:text-brand transition-colors"
-                                          >
-                                            <Edit3 size={11} />
-                                          </button>
-                                          <button 
-                                            onClick={(e) => { e.stopPropagation(); deleteSavedMutation.mutate(q.id); }}
-                                            className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-                                          >
-                                            <Trash2 size={11} />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {isExpanded && filteredFolderQueries.length === 0 && (
-                                  <div className="ml-4 px-2 py-1.5 text-[9px] text-slate-400 dark:text-slate-500 italic">
-                                    No queries match search
-                                  </div>
-                                )}
+                  return (
+                    <div className="space-y-1">
+                      {/* Root Level Queries (No Folder) */}
+                      {filteredRoot.length > 0 && (
+                        <div className="space-y-px">
+                          {filteredRoot.map(q => (
+                            <div key={q.id} className="group/item flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm cursor-pointer transition-all" onClick={() => addTab(q)}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FileCode2 size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{q.name}</span>
                               </div>
-                            );
-                          })}
-
-                          {/* Empty state */}
-                          {(!savedQueries || savedQueries.length === 0) && (!folders || folders.length === 0) && (
-                            <div className="py-10 text-center space-y-2 opacity-30">
-                              <FileCode2 size={40} className="mx-auto" />
-                              <p className="text-[10px] font-bold uppercase tracking-widest">No saved queries</p>
+                              <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditQueryId(q.id);
+                                    setEditName(q.name);
+                                    setEditFolder(q.folder || '');
+                                    setIsEditModalOpen(true);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-brand transition-colors"
+                                >
+                                  <Edit3 size={11} />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); deleteSavedMutation.mutate(q.id); }}
+                                  className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
                             </div>
-                          )}
-
-                          {/* No search results */}
-                          {folderSearchQuery && filteredRoot.length === 0 && filteredFolders.length === 0 && (
-                            <div className="py-10 text-center space-y-2 opacity-30">
-                              <Search size={40} className="mx-auto" />
-                              <p className="text-[10px] font-bold uppercase tracking-widest">No results found</p>
-                            </div>
-                          )}
+                          ))}
                         </div>
-                    );
+                      )}
+
+                      {/* Folders and their queries */}
+                      {filteredFolders.map((folderInfo) => {
+                        const folderQueries = folderGroups[folderInfo.name] || [];
+                        const filteredFolderQueries = folderQueries.filter(q =>
+                          q.name.toLowerCase().includes(searchLower)
+                        );
+                        const isExpanded = expandedFolders[folderInfo.name] ?? true;
+
+                        return (
+                          <div key={folderInfo.name} className="space-y-px">
+                            <button
+                              onClick={() => setExpandedFolders(p => ({ ...p, [folderInfo.name]: !isExpanded }))}
+                              className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
+                            >
+                              <div className="flex items-center gap-2">
+                                <ChevronRight size={13} className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                <FolderOpen size={13} className="text-brand/60 group-hover:text-brand transition-colors" />
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{folderInfo.name}</span>
+                                <span className="text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1 rounded-full font-bold">
+                                  {filteredFolderQueries.length}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditFolderOldName(folderInfo.name);
+                                    setEditFolderNewName(folderInfo.name);
+                                    setIsEditFolderModalOpen(true);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-brand transition-colors"
+                                  title="Edit folder name"
+                                >
+                                  <Edit3 size={11} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFolderToDelete(folderInfo.name);
+                                  }}
+                                  className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+                                  title="Delete folder"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                            </button>
+
+                            {/* Folder Queries - Tree indented */}
+                            {isExpanded && filteredFolderQueries.length > 0 && (
+                              <div className="ml-4 border-l-2 border-slate-200 dark:border-slate-800 pl-2 space-y-px animate-in slide-in-from-left-1 duration-150">
+                                {filteredFolderQueries.map(q => (
+                                  <div key={q.id} className="group/item flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm cursor-pointer transition-all" onClick={() => addTab(q)}>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <FileCode2 size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{q.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditQueryId(q.id);
+                                          setEditName(q.name);
+                                          setEditFolder(q.folder || '');
+                                          setIsEditModalOpen(true);
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-brand transition-colors"
+                                      >
+                                        <Edit3 size={11} />
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); deleteSavedMutation.mutate(q.id); }}
+                                        className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+                                      >
+                                        <Trash2 size={11} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {isExpanded && filteredFolderQueries.length === 0 && (
+                              <div className="ml-4 px-2 py-1.5 text-[9px] text-slate-400 dark:text-slate-500 italic">
+                                No queries match search
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Empty state */}
+                      {(!savedQueries || savedQueries.length === 0) && (!folders || folders.length === 0) && (
+                        <div className="py-10 text-center space-y-2 opacity-30">
+                          <FileCode2 size={40} className="mx-auto" />
+                          <p className="text-[10px] font-bold uppercase tracking-widest">No saved queries</p>
+                        </div>
+                      )}
+
+                      {/* No search results */}
+                      {folderSearchQuery && filteredRoot.length === 0 && filteredFolders.length === 0 && (
+                        <div className="py-10 text-center space-y-2 opacity-30">
+                          <Search size={40} className="mx-auto" />
+                          <p className="text-[10px] font-bold uppercase tracking-widest">No results found</p>
+                        </div>
+                      )}
+                    </div>
+                  );
                 })()}
               </div>
             </div>
@@ -957,8 +956,8 @@ const SQLLabPage: React.FC = () => {
                 key={t.id}
                 onClick={() => setActiveTabId(t.id)}
                 className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-semibold cursor-pointer border-b-2 transition-all whitespace-nowrap ${t.id === activeTabId
-                    ? 'text-brand border-brand bg-white dark:bg-slate-950'
-                    : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60'
+                  ? 'text-brand border-brand bg-white dark:bg-slate-950'
+                  : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60'
                   }`}
               >
                 <FileCode2 size={12} className={t.id === activeTabId ? 'text-brand' : 'text-slate-400'} />
@@ -988,10 +987,10 @@ const SQLLabPage: React.FC = () => {
               extensions={[sqlExtension]}
               onChange={(v) => updateActiveTab({ query: v })}
               className="absolute inset-0 text-[13px] [&_.cm-editor]:!h-full [&_.cm-scroller]:!overflow-auto"
-              basicSetup={{ 
-                lineNumbers: true, 
-                foldGutter: true, 
-                highlightActiveLine: true, 
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: true,
+                highlightActiveLine: true,
                 autocompletion: true,
                 completionKeymap: true,
                 closeBrackets: true
@@ -1106,7 +1105,7 @@ const SQLLabPage: React.FC = () => {
             {/* Pagination Controls */}
             {result && !result.error && result.rows.length > RESULT_PAGE_SIZE && (
               <div className="shrink-0 flex items-center justify-between px-4 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <button 
+                <button
                   disabled={resultPage === 1}
                   onClick={() => setResultPage(p => p - 1)}
                   className="px-3 py-1 rounded-md text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
@@ -1116,7 +1115,7 @@ const SQLLabPage: React.FC = () => {
                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                   Page {resultPage} of {Math.ceil(result.rows.length / RESULT_PAGE_SIZE)}
                 </span>
-                <button 
+                <button
                   disabled={resultPage >= Math.ceil(result.rows.length / RESULT_PAGE_SIZE)}
                   onClick={() => setResultPage(p => p + 1)}
                   className="px-3 py-1 rounded-md text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
@@ -1140,8 +1139,8 @@ const SQLLabPage: React.FC = () => {
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Query Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={saveName}
                   onChange={e => setSaveName(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-all"
@@ -1169,7 +1168,7 @@ const SQLLabPage: React.FC = () => {
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
-              <button 
+              <button
                 onClick={() => saveMutation.mutate({ name: saveName, folder: saveFolder, sql: activeTab.query, datasource_id: datasourceId, schema_name: schema })}
                 disabled={!saveName || saveMutation.isPending}
                 className="px-6 py-2 bg-brand text-white text-xs font-bold rounded-xl shadow-lg shadow-brand/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
@@ -1193,8 +1192,8 @@ const SQLLabPage: React.FC = () => {
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Query Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-all"
@@ -1222,7 +1221,7 @@ const SQLLabPage: React.FC = () => {
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
-              <button 
+              <button
                 onClick={() => editQueryId && updateQueryMutation.mutate({ id: editQueryId, data: { name: editName, folder: editFolder || null } })}
                 disabled={!editName || updateQueryMutation.isPending}
                 className="px-6 py-2 bg-brand text-white text-xs font-bold rounded-xl shadow-lg shadow-brand/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
@@ -1246,8 +1245,8 @@ const SQLLabPage: React.FC = () => {
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Folder Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newFolderName}
                   onChange={e => setNewFolderName(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-all"
@@ -1259,7 +1258,7 @@ const SQLLabPage: React.FC = () => {
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setIsCreateFolderModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
-              <button 
+              <button
                 onClick={() => newFolderName && createFolderMutation.mutate(newFolderName)}
                 disabled={!newFolderName || createFolderMutation.isPending}
                 className="px-6 py-2 bg-brand text-white text-xs font-bold rounded-xl shadow-lg shadow-brand/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
@@ -1282,13 +1281,13 @@ const SQLLabPage: React.FC = () => {
             </div>
             <div className="p-6 space-y-3">
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Are you sure you want to delete folder "<span className="font-bold">{folderToDelete}</span>"? 
+                Are you sure you want to delete folder "<span className="font-bold">{folderToDelete}</span>"?
                 All queries in this folder will be moved to the root directory.
               </p>
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setFolderToDelete(null)} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
-              <button 
+              <button
                 onClick={() => deleteFolderMutation.mutate(folderToDelete)}
                 disabled={deleteFolderMutation.isPending}
                 className="px-6 py-2 bg-red-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-red-500/20 hover:bg-red-600 active:scale-95 transition-all flex items-center gap-2"
@@ -1312,7 +1311,7 @@ const SQLLabPage: React.FC = () => {
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">New Folder Name</label>
-                <input 
+                <input
                   type="text"
                   value={editFolderNewName}
                   onChange={(e) => setEditFolderNewName(e.target.value)}
@@ -1329,7 +1328,7 @@ const SQLLabPage: React.FC = () => {
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setIsEditFolderModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
-              <button 
+              <button
                 onClick={() => editFolderOldName && renameFolderMutation.mutate({ oldName: editFolderOldName, newName: editFolderNewName })}
                 disabled={!editFolderNewName || renameFolderMutation.isPending}
                 className="px-6 py-2 bg-brand text-white text-xs font-bold rounded-xl shadow-lg shadow-brand/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
