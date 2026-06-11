@@ -15,6 +15,45 @@ from app.datasources.pool import ds_pool
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
+async def _validate_expression(db: AsyncSession, dataset: Dataset, expression: str, current_user: User):
+    from app.charts.utils import get_sync_uri, get_quoted_table_ref
+    
+    result = await db.execute(select(Datasource).where(Datasource.id == dataset.datasource_id))
+    datasource = result.scalar_one_or_none()
+    if not datasource:
+        return
+        
+    try:
+        impersonate = datasource.advanced_properties.get("impersonate_user", False) if datasource.advanced_properties else False
+        engine = ds_pool.get_engine(get_sync_uri(datasource.connection_uri), current_user.email if impersonate else None)
+        
+        table_ref = get_quoted_table_ref(dataset.schema_name, dataset.table_name, datasource.engine)
+        
+        if dataset.dataset_type == "flow" and dataset.custom_sql:
+            base_query = dataset.custom_sql
+        elif dataset.custom_sql:
+            base_query = dataset.custom_sql
+        else:
+            base_query = f"SELECT * FROM {table_ref}"
+            
+        is_oracle = "oracle" in (datasource.engine or "").lower()
+        alias_keyword = "" if is_oracle else "AS "
+        
+        test_query = f"SELECT {expression} FROM ({base_query.strip().rstrip(';')}) {alias_keyword}val_tab"
+        
+        if is_oracle:
+            test_query += f" FETCH FIRST 1 ROWS ONLY"
+        else:
+            test_query += f" LIMIT 1"
+            
+        await run_in_threadpool(pd.read_sql_query, test_query, engine)
+    except Exception as e:
+        error_msg = str(e)
+        if hasattr(e, "orig"):
+            error_msg = str(e.orig)
+        raise HTTPException(status_code=400, detail=f"Invalid SQL expression: {error_msg}")
+
+
 @router.post("/", response_model=DatasetResponse, status_code=status.HTTP_201_CREATED)
 async def create_dataset(
     ds_in: DatasetCreate, 
@@ -188,6 +227,14 @@ async def create_metric(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(has_permission("menu:data_management"))
 ):
+    # Verify dataset exists
+    result = await db.execute(select(Dataset).where(Dataset.id == ds_id))
+    dataset = result.scalar_one_or_none()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+        
+    await _validate_expression(db, dataset, metric_in.expression, current_user)
+    
     db_metric = DatasetMetric(
         dataset_id=ds_id,
         name=metric_in.name,
@@ -225,6 +272,8 @@ async def create_calculated_column(
     dataset = result.scalar_one_or_none()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+        
+    await _validate_expression(db, dataset, col_in.expression, current_user)
     
     db_col = DatasetCalculatedColumn(
         dataset_id=ds_id,
@@ -261,6 +310,12 @@ async def update_calculated_column(
         raise HTTPException(status_code=404, detail="Calculated column not found")
     
     update_data = col_in.model_dump(exclude_unset=True)
+    if "expression" in update_data:
+        result = await db.execute(select(Dataset).where(Dataset.id == ds_id))
+        dataset = result.scalar_one_or_none()
+        if dataset:
+            await _validate_expression(db, dataset, update_data["expression"], current_user)
+            
     for field, value in update_data.items():
         setattr(db_col, field, value)
     
@@ -398,6 +453,12 @@ async def update_metric(
         raise HTTPException(status_code=404, detail="Metric not found")
     
     update_data = metric_in.model_dump(exclude_unset=True)
+    if "expression" in update_data:
+        result_ds = await db.execute(select(Dataset).where(Dataset.id == ds_id))
+        dataset = result_ds.scalar_one_or_none()
+        if dataset:
+            await _validate_expression(db, dataset, update_data["expression"], current_user)
+            
     for key, value in update_data.items():
         setattr(metric, key, value)
     

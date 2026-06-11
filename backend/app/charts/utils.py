@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Tuple, Set
 import pandas as pd
 from sqlalchemy import text, create_engine
+import re
 
 def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: Dict[str, Any] = None, engine_type: str = "postgres", joins: List[Any] = None, rls_clauses: Dict[int, List[str]] = None) -> Tuple[str, List[str], List[Dict[str, Any]], bool, List[Dict], List[Dict]]:
     is_multi = isinstance(dataset_or_datasets, dict)
@@ -209,7 +210,8 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                 if dataset:
                     # Replace physical column names in the expression with dataset-prefixed versions
                     for physical_col in dataset.columns:
-                        col_name = col_name.replace(physical_col.column_name, f"ds_{dataset_id}.{physical_col.column_name}")
+                        pattern = r'(?<!\.)\b' + re.escape(physical_col.column_name) + r'\b'
+                        col_name = re.sub(pattern, f"ds_{dataset_id}.{physical_col.column_name}", col_name)
             
             col_expr = f"ds_{dataset_id}.{col_name}" if is_multi and dataset_id and not is_calculated else col_name
             
@@ -316,7 +318,8 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                     if is_multi:
                         # Replace column names in expression with dataset-prefixed versions
                         for physical_col in dataset.columns:
-                            expr = expr.replace(physical_col.column_name, f"ds_{ds_id}.{physical_col.column_name}")
+                            pattern = r'(?<!\.)\b' + re.escape(physical_col.column_name) + r'\b'
+                            expr = re.sub(pattern, f"ds_{ds_id}.{physical_col.column_name}", expr)
                     col_expr = expr
                     alias = dim_alias if dim_alias and dim_alias != dim_name else actual_name
                     select_cols.append(f'{col_expr} AS "{alias}"')
@@ -333,10 +336,12 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
             if dataset:
                 met = next((m for m in dataset.metrics if m.name == actual_name or m.friendly_name == actual_name), None)
                 if met:
-                    expr = met.expression.replace(actual_name, f"ds_{ds_id}.{actual_name}") if is_multi else met.expression # rudimentary prefixing
-                    # A better way is to assume expression uses column names that need prefixing if multi, but that's hard to parse safely.
-                    # For MVP, we just use the raw expression and hope it's not ambiguous, or prefix standard aggs.
-                    select_cols.append(f'{met.expression} AS "{met.name}"')
+                    expr = met.expression
+                    if is_multi:
+                        for physical_col in dataset.columns:
+                            pattern = r'(?<!\.)\b' + re.escape(physical_col.column_name) + r'\b'
+                            expr = re.sub(pattern, f"ds_{ds_id}.{physical_col.column_name}", expr)
+                    select_cols.append(f'{expr} AS "{met.name}"')
         elif isinstance(metric, dict):
             m_name = metric.get("name") or metric.get("column")
             ds_id, actual_name = parse_ref(m_name)
@@ -357,8 +362,13 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
                 else:
                     met = next((m for m in dataset.metrics if m.name == actual_name or m.friendly_name == actual_name), None)
                     if met:
+                        expr = met.expression
+                        if is_multi:
+                            for physical_col in dataset.columns:
+                                pattern = r'(?<!\.)\b' + re.escape(physical_col.column_name) + r'\b'
+                                expr = re.sub(pattern, f"ds_{ds_id}.{physical_col.column_name}", expr)
                         alias = metric.get("alias") or met.name
-                        select_cols.append(f'{met.expression} AS "{alias}"')
+                        select_cols.append(f'{expr} AS "{alias}"')
 
     if not select_cols:
         return "", [], [], False
