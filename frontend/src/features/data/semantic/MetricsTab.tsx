@@ -30,13 +30,13 @@ const MetricsTab: React.FC<Props> = ({ datasetId, metrics }) => {
 
   const deleteMut = useMutation({
     mutationFn: (metricId: number) => api.delete(`/api/datasets/${datasetId}/metrics/${metricId}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); toast.success('Metric deleted'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] }); toast.success('Metric deleted'); },
     onError: () => toast.error('Failed to delete')
   });
 
   const updateMut = useMutation({
     mutationFn: ({ metricId, data }: { metricId: number; data: any }) => api.patch(`/api/datasets/${datasetId}/metrics/${metricId}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); setEditId(null); toast.success('Metric updated'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] }); setEditId(null); toast.success('Metric updated'); },
     onError: () => toast.error('Failed to update')
   });
 

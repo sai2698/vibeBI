@@ -32,13 +32,13 @@ const CalculatedColumnsTab: React.FC<Props> = ({ datasetId, columns }) => {
 
   const deleteMut = useMutation({
     mutationFn: (colId: number) => api.delete(`/api/datasets/${datasetId}/columns/${colId}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); toast.success('Deleted'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] }); toast.success('Deleted'); },
     onError: () => toast.error('Failed to delete')
   });
 
   const updateMut = useMutation({
     mutationFn: ({ colId, data }: { colId: number; data: any }) => api.patch(`/api/datasets/${datasetId}/columns/${colId}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); setEditId(null); toast.success('Updated'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] }); setEditId(null); toast.success('Updated'); },
     onError: () => toast.error('Failed to update')
   });
 

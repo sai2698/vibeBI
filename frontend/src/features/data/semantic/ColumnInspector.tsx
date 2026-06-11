@@ -1,7 +1,7 @@
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../api';
-import { X, Save, Type, Hash, Calendar, ToggleLeft, ToggleRight, Code, AlertCircle } from 'lucide-react';
+import { X, Save, Type, Hash, Calendar, ToggleLeft, ToggleRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Column {
@@ -38,7 +38,7 @@ const ColumnInspector: React.FC<Props> = ({ datasetId, column, onClose }) => {
 
   const updateMut = useMutation({
     mutationFn: (data: any) => api.patch(`/api/datasets/${datasetId}/columns/${column.id}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] }); toast.success('Column saved'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] }); toast.success('Column saved'); },
     onError: () => toast.error('Save failed')
   });
 

@@ -28,7 +28,7 @@ const CalculatedColumnFormModal: React.FC<CalculatedColumnFormModalProps> = ({ i
   const createMutation = useMutation({
     mutationFn: (newCol: CalculatedColumnFormData) => api.post(`/api/datasets/${datasetId}/calculated-columns`, newCol),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] });
       reset();
       onClose();
     },

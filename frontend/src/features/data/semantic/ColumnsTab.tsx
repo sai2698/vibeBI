@@ -68,7 +68,7 @@ const ColumnsTab: React.FC<Props> = ({ datasetId, columns, onSelectColumn, selec
     mutationFn: ({ colId, data }: { colId: number; data: any }) =>
       api.patch(`/api/datasets/${datasetId}/columns/${colId}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['datasets', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] });
       toast.success('Column updated');
     },
     onError: () => toast.error('Failed to update column')
