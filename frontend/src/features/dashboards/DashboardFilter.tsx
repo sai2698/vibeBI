@@ -27,6 +27,7 @@ interface FilterDef {
   options?: string[];
   default_value?: string;
   is_required?: boolean;
+  enable_drill_down?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,6 +157,8 @@ interface FilterSelectDropdownProps {
   selectedValues: string[];
   onChange: (values: string[]) => void;
   dashboardId?: string;
+  stagedFilters?: Record<string, any>;
+  allFilters?: FilterDef[];
 }
 
 export const FilterSelectDropdown: React.FC<FilterSelectDropdownProps> = ({
@@ -163,13 +166,35 @@ export const FilterSelectDropdown: React.FC<FilterSelectDropdownProps> = ({
   selectedValues = [],
   onChange,
   dashboardId,
+  stagedFilters,
+  allFilters,
 }) => {
+  // Compute dataset filters for drill-down
+  const drillFilters = useMemo(() => {
+    if (!filter.enable_drill_down || !stagedFilters || !allFilters) return null;
+    const filters: Record<string, any> = {};
+    allFilters.forEach(f => {
+      if (f.dataset_id === filter.dataset_id && f.id !== filter.id && stagedFilters[f.column] !== undefined) {
+        const val = stagedFilters[f.column];
+        if (val && (!Array.isArray(val) || val.length > 0)) {
+          filters[f.value_column || f.column] = val;
+        }
+      }
+    });
+    return Object.keys(filters).length > 0 ? filters : null;
+  }, [filter.enable_drill_down, filter.dataset_id, filter.id, stagedFilters, allFilters]);
+
   const { data: dynamicOptions, isLoading } = useQuery<string[]>({
-    queryKey: ['datasets', filter.dataset_id, 'columns', filter.value_column, 'values', dashboardId],
+    queryKey: ['datasets', filter.dataset_id, 'columns', filter.value_column, 'values', dashboardId, drillFilters],
     queryFn: async () => {
-      const url = dashboardId 
+      let url = dashboardId 
         ? `/api/datasets/${filter.dataset_id}/columns/${filter.value_column}/values?dashboard_id=${dashboardId}`
         : `/api/datasets/${filter.dataset_id}/columns/${filter.value_column}/values`;
+      
+      if (drillFilters) {
+        url += `${url.includes('?') ? '&' : '?'}applied_filters=${encodeURIComponent(JSON.stringify(drillFilters))}`;
+      }
+      
       const response = await api.get(url);
       return response.data;
     },
@@ -456,6 +481,7 @@ interface DashboardFilterProps {
   setOpenFilterId: (id: string | null) => void;
   isMobile: boolean;
   dashboardId?: string;
+  allFilters?: FilterDef[];
 }
 
 const DashboardFilter: React.FC<DashboardFilterProps> = ({
@@ -466,6 +492,7 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
   setOpenFilterId,
   isMobile,
   dashboardId,
+  allFilters,
 }) => {
   // ── DOM refs for open/close (no React state, no re-render on toggle) ─────
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -593,6 +620,8 @@ const DashboardFilter: React.FC<DashboardFilterProps> = ({
             onChange={val =>
               setStagedFilters(prev => ({ ...prev, [filter.column]: val }))
             }
+            stagedFilters={stagedFilters}
+            allFilters={allFilters}
           />
         ) : filter.type === 'date_range' ? (
           <FilterDateDropdown

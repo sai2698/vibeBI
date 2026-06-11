@@ -569,6 +569,7 @@ async def get_column_values(
     search: Optional[str] = None,
     limit: int = 20000,
     dashboard_id: Optional[int] = None,
+    applied_filters: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -599,7 +600,7 @@ async def get_column_values(
         dashboard = dash_res.scalar_one_or_none()
         if dashboard and dashboard.cache_config and dashboard.cache_config.get("enable_filter_cache", False):
             cache_ttl = int(dashboard.cache_config.get("filter_ttl", 3600))
-            hash_str = f"{ds_id}:{col_name}:{search or ''}:{current_user.id}"
+            hash_str = f"{ds_id}:{col_name}:{search or ''}:{current_user.id}:{applied_filters or ''}"
             payload_hash = hashlib.md5(hash_str.encode()).hexdigest()
             cache_key = f"dashboard:{dashboard_id}:filters:{payload_hash}"
             
@@ -637,13 +638,68 @@ async def get_column_values(
             col_identifier = f'"{actual_col}"'
 
         val_query = f"SELECT DISTINCT {col_identifier} FROM ({base_query.strip().rstrip(';')}) {alias_keyword}val_tab"
+        
+        where_clauses = []
         if search:
             if is_oracle:
-                val_query += f" WHERE UPPER(CAST({col_identifier} AS VARCHAR2(4000))) LIKE UPPER('%{search}%')"
+                where_clauses.append(f"UPPER(CAST({col_identifier} AS VARCHAR2(4000))) LIKE UPPER('%{search}%')")
             elif is_mysql:
-                val_query += f" WHERE CAST({col_identifier} AS CHAR) LIKE '%{search}%'"
+                where_clauses.append(f"CAST({col_identifier} AS CHAR) LIKE '%{search}%'")
             else:
-                val_query += f" WHERE CAST({col_identifier} AS TEXT) ILIKE '%{search}%'"
+                where_clauses.append(f"CAST({col_identifier} AS TEXT) ILIKE '%{search}%'")
+                
+        if applied_filters:
+            import json
+            try:
+                filters_dict = json.loads(applied_filters)
+                for f_col, f_val in filters_dict.items():
+                    if f_val is None or f_val == '':
+                        continue
+                    
+                    if is_mysql:
+                        f_col_id = f"`{f_col}`"
+                    elif is_oracle and f_col.replace('_', '').isalnum():
+                        f_col_id = f_col
+                    else:
+                        f_col_id = f'"{f_col}"'
+                        
+                    if isinstance(f_val, list):
+                        if len(f_val) > 0:
+                            in_vals = []
+                            has_null = False
+                            has_empty = False
+                            for v in f_val:
+                                if v == '__NULL__':
+                                    has_null = True
+                                elif v == '__EMPTY__':
+                                    has_empty = True
+                                else:
+                                    safe_v = str(v).replace("'", "''")
+                                    in_vals.append(f"'{safe_v}'")
+                                    
+                            or_conds = []
+                            if in_vals:
+                                or_conds.append(f"{f_col_id} IN ({','.join(in_vals)})")
+                            if has_null:
+                                or_conds.append(f"{f_col_id} IS NULL")
+                            if has_empty:
+                                or_conds.append(f"{f_col_id} = ''")
+                                
+                            if or_conds:
+                                where_clauses.append(f"({' OR '.join(or_conds)})")
+                    else:
+                        if f_val == '__NULL__':
+                            where_clauses.append(f"{f_col_id} IS NULL")
+                        elif f_val == '__EMPTY__':
+                            where_clauses.append(f"{f_col_id} = ''")
+                        else:
+                            safe_v = str(f_val).replace("'", "''")
+                            where_clauses.append(f"{f_col_id} = '{safe_v}'")
+            except Exception as e:
+                print(f"Failed to apply filters: {e}")
+        
+        if where_clauses:
+            val_query += f" WHERE {' AND '.join(where_clauses)}"
         
         val_query += f" ORDER BY {col_identifier} ASC"
         

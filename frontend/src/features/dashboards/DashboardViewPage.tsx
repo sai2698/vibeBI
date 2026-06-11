@@ -122,6 +122,7 @@ interface FilterDef {
   options?: string[];
   default_value?: string;
   is_required?: boolean;
+  enable_drill_down?: boolean;
 }
 
 interface FilterPreset {
@@ -1220,6 +1221,7 @@ const DashboardViewPage: React.FC = () => {
                   openFilterId={openFilterId}
                   setOpenFilterId={setOpenFilterId}
                   isMobile={isMobile}
+                  allFilters={dashboard?.filter_config || []}
                 />
               ))}
               

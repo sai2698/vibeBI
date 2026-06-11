@@ -18,6 +18,7 @@ interface FilterDef {
   options?: string[];
   default_value?: string;
   is_required?: boolean;
+  enable_drill_down?: boolean;
 }
 
 interface DashboardFiltersPanelProps {
@@ -549,18 +550,34 @@ const DashboardFiltersPanel: React.FC<DashboardFiltersPanelProps> = ({ isOpen, o
                         )}
                       </div>
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer group" onClick={e => e.stopPropagation()}>
-                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${f.is_required ? 'bg-red-500 border-red-500' : 'bg-white border-slate-300 group-hover:border-red-400'}`}>
-                        {f.is_required && <Check size={12} className="text-white" strokeWidth={3} />}
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="hidden"
-                        checked={f.is_required || false}
-                        onChange={e => updateFilter(idx, { is_required: e.target.checked })}
-                      />
-                      <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Required</span>
-                    </label>
+                    <div className="flex items-center gap-4" onClick={e => e.stopPropagation()}>
+                      {f.type === 'select' && f.source === 'dynamic' && (
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${f.enable_drill_down ? 'bg-brand border-brand' : 'bg-white border-slate-300 group-hover:border-brand/50'}`}>
+                            {f.enable_drill_down && <Check size={12} className="text-white" strokeWidth={3} />}
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="hidden"
+                            checked={f.enable_drill_down || false}
+                            onChange={e => updateFilter(idx, { enable_drill_down: e.target.checked })}
+                          />
+                          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Drill Down</span>
+                        </label>
+                      )}
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${f.is_required ? 'bg-red-500 border-red-500' : 'bg-white border-slate-300 group-hover:border-red-400'}`}>
+                          {f.is_required && <Check size={12} className="text-white" strokeWidth={3} />}
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={f.is_required || false}
+                          onChange={e => updateFilter(idx, { is_required: e.target.checked })}
+                        />
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Required</span>
+                      </label>
+                    </div>
                   </div>
                   
                   {isExpanded && (
