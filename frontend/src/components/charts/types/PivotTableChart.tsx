@@ -401,10 +401,8 @@ export const PivotTableChart: React.FC<PivotTableChartProps> = ({
     if (agg === 'max') {
       return Math.max(...values);
     }
-    if (agg === 'count') {
-      return values.length;
-    }
-    return values.reduce((s, v) => s + v, 0); // fallback sum
+    // For 'count', 'count_distinct', or 'sum', the rollup of pre-aggregated leaves should be SUM
+    return values.reduce((s, v) => s + v, 0); 
   };
 
   // Format Helper
