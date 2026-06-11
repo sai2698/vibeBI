@@ -231,12 +231,14 @@ class DatasetMetricBase(BaseModel):
     friendly_name: Optional[str] = None
     expression: str
     description: Optional[str] = None
+    is_visible: Optional[bool] = True
 
 class DatasetMetricUpdate(BaseModel):
     name: Optional[str] = None
     friendly_name: Optional[str] = None
     expression: Optional[str] = None
     description: Optional[str] = None
+    is_visible: Optional[bool] = None
 
 class DatasetMetricResponse(DatasetMetricBase):
     id: int

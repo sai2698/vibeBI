@@ -940,7 +940,7 @@ const DataMartExplorer: React.FC = () => {
                       {/* All items in one list with distinct icons */}
                       <div className="space-y-0.5">
                         {/* Physical Columns - Blue Type icon */}
-                        {ds.columns?.map((col: any) => (
+                        {ds.columns?.filter((col: any) => col.is_visible !== false).map((col: any) => (
                           <div 
                             key={`col_${col.id}`} 
                             draggable
@@ -949,12 +949,12 @@ const DataMartExplorer: React.FC = () => {
                           >
                             <Type size={12} className="text-blue-500 shrink-0" />
                             <span className="truncate flex-1">{col.friendly_name || col.column_name}</span>
-                            {col.is_filterable !== false && <Filter size={10} className="text-slate-400 dark:text-slate-500 shrink-0 opacity-0 group-hover:opacity-100" />}
+                            {col.is_filterable !== false && <Filter size={10} className="text-slate-400 dark:text-slate-500 shrink-0" title="Filterable" />}
                           </div>
                         ))}
                         
                         {/* Calculated Columns - Purple Calculator icon */}
-                        {ds.calculated_columns?.map((calcCol: any) => (
+                        {ds.calculated_columns?.filter((calcCol: any) => calcCol.is_visible !== false).map((calcCol: any) => (
                           <div 
                             key={`calc_${calcCol.id}`} 
                             draggable
@@ -968,12 +968,12 @@ const DataMartExplorer: React.FC = () => {
                           >
                             <Calculator size={12} className="text-purple-500 shrink-0" />
                             <span className="truncate flex-1">{calcCol.friendly_name || calcCol.name}</span>
-                            {calcCol.is_filterable !== false && <Filter size={10} className="text-slate-400 dark:text-slate-500 shrink-0 opacity-0 group-hover:opacity-100" />}
+                            {calcCol.is_filterable !== false && <Filter size={10} className="text-slate-400 dark:text-slate-500 shrink-0" title="Filterable" />}
                           </div>
                         ))}
                         
                         {/* Metrics - Amber FunctionSquare icon */}
-                        {ds.metrics?.map((met: any) => (
+                        {ds.metrics?.filter((met: any) => met.is_visible !== false).map((met: any) => (
                           <div 
                             key={`metric_${met.id}`} 
                             draggable
@@ -981,7 +981,7 @@ const DataMartExplorer: React.FC = () => {
                             className="flex items-center gap-2 p-1.5 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded cursor-grab active:cursor-grabbing text-xs text-slate-600 dark:text-slate-400 group"
                           >
                             <FunctionSquare size={12} className="text-amber-500 shrink-0" />
-                            <span className="truncate">{met.friendly_name || met.name}</span>
+                            <span className="truncate flex-1">{met.friendly_name || met.name}</span>
                           </div>
                         ))}
                       </div>

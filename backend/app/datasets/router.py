@@ -46,7 +46,7 @@ async def _validate_expression(db: AsyncSession, dataset: Dataset, expression: s
         else:
             test_query += f" LIMIT 1"
             
-        await run_in_threadpool(pd.read_sql_query, test_query, engine)
+        await run_in_threadpool(pd.read_sql_query, text(test_query), engine)
     except Exception as e:
         error_msg = str(e)
         if hasattr(e, "orig"):
@@ -240,7 +240,8 @@ async def create_metric(
         name=metric_in.name,
         friendly_name=metric_in.friendly_name,
         expression=metric_in.expression,
-        description=metric_in.description
+        description=metric_in.description,
+        is_visible=metric_in.is_visible
     )
     db.add(db_metric)
     await db.commit()
@@ -681,7 +682,19 @@ async def get_column_values(
         
         # Find the actual column name from metadata to ensure correct casing
         db_col = next((c for c in dataset.columns if c.column_name == col_name or c.friendly_name == col_name), None)
-        actual_col = db_col.column_name if db_col else col_name
+        calc_col = next((c for c in dataset.calculated_columns if c.name == col_name or c.expression == col_name), None)
+        
+        is_expression = False
+        if db_col:
+            actual_col = db_col.column_name
+        elif calc_col:
+            actual_col = calc_col.expression
+            is_expression = True
+        else:
+            actual_col = col_name
+            import re
+            if re.search(r'[^a-zA-Z0-9_]', actual_col):
+                is_expression = True
         
         from app.charts.utils import wrap_query
         
@@ -691,12 +704,15 @@ async def get_column_values(
         alias_keyword = "" if is_oracle else "AS "
         
         # Dialect-specific column identifier
-        if is_mysql:
-            col_identifier = f"`{actual_col}`"
-        elif is_oracle and actual_col.replace('_', '').isalnum():
+        if is_expression:
             col_identifier = actual_col
         else:
-            col_identifier = f'"{actual_col}"'
+            if is_mysql:
+                col_identifier = f"`{actual_col}`"
+            elif is_oracle and actual_col.replace('_', '').isalnum():
+                col_identifier = actual_col
+            else:
+                col_identifier = f'"{actual_col}"'
 
         val_query = f"SELECT DISTINCT {col_identifier} FROM ({base_query.strip().rstrip(';')}) {alias_keyword}val_tab"
         
@@ -717,12 +733,30 @@ async def get_column_values(
                     if f_val is None or f_val == '':
                         continue
                     
-                    if is_mysql:
-                        f_col_id = f"`{f_col}`"
-                    elif is_oracle and f_col.replace('_', '').isalnum():
-                        f_col_id = f_col
+                    f_db_col = next((c for c in dataset.columns if c.column_name == f_col or c.friendly_name == f_col), None)
+                    f_calc_col = next((c for c in dataset.calculated_columns if c.name == f_col or c.expression == f_col), None)
+                    
+                    f_is_expr = False
+                    if f_db_col:
+                        f_actual_col = f_db_col.column_name
+                    elif f_calc_col:
+                        f_actual_col = f_calc_col.expression
+                        f_is_expr = True
                     else:
-                        f_col_id = f'"{f_col}"'
+                        f_actual_col = f_col
+                        import re
+                        if re.search(r'[^a-zA-Z0-9_]', f_actual_col):
+                            f_is_expr = True
+                            
+                    if f_is_expr:
+                        f_col_id = f_actual_col
+                    else:
+                        if is_mysql:
+                            f_col_id = f"`{f_actual_col}`"
+                        elif is_oracle and f_actual_col.replace('_', '').isalnum():
+                            f_col_id = f_actual_col
+                        else:
+                            f_col_id = f'"{f_actual_col}"'
                         
                     if isinstance(f_val, list):
                         if len(f_val) > 0:

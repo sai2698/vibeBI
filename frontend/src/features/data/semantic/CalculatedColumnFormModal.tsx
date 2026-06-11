@@ -19,14 +19,34 @@ interface CalculatedColumnFormModalProps {
   isOpen: boolean;
   datasetId: number;
   onClose: () => void;
+  initialData?: CalculatedColumnFormData & { id?: number };
 }
 
-const CalculatedColumnFormModal: React.FC<CalculatedColumnFormModalProps> = ({ isOpen, datasetId, onClose }) => {
+const CalculatedColumnFormModal: React.FC<CalculatedColumnFormModalProps> = ({ isOpen, datasetId, onClose, initialData }) => {
   const queryClient = useQueryClient();
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<CalculatedColumnFormData>();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CalculatedColumnFormData>({
+    defaultValues: initialData || {
+      is_filterable: true,
+      is_visible: true
+    }
+  });
 
-  const createMutation = useMutation({
-    mutationFn: (newCol: CalculatedColumnFormData) => api.post(`/api/datasets/${datasetId}/calculated-columns`, newCol),
+  // Update form when initialData changes
+  React.useEffect(() => {
+    if (initialData) {
+      reset(initialData);
+    } else {
+      reset({ is_filterable: true, is_visible: true });
+    }
+  }, [initialData, reset, isOpen]);
+
+  const saveMutation = useMutation({
+    mutationFn: (data: CalculatedColumnFormData) => {
+      if (initialData?.id) {
+        return api.patch(`/api/datasets/${datasetId}/calculated-columns/${initialData.id}`, data);
+      }
+      return api.post(`/api/datasets/${datasetId}/calculated-columns`, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['datasets', 'detail', datasetId] });
       reset();
@@ -40,13 +60,13 @@ const CalculatedColumnFormModal: React.FC<CalculatedColumnFormModalProps> = ({ i
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
       <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 dark:text-white text-sm">Add Calculated Column</h3>
+          <h3 className="font-bold text-slate-900 dark:text-white text-sm">{initialData ? 'Edit' : 'Add'} Calculated Column</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-350 transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit => createMutation.mutate({ ...onSubmit, dataset_id: datasetId }))} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit => saveMutation.mutate({ ...onSubmit, dataset_id: datasetId }))} className="p-6 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Column Name (ID)</label>
             <input
@@ -123,10 +143,10 @@ const CalculatedColumnFormModal: React.FC<CalculatedColumnFormModalProps> = ({ i
             </label>
           </div>
 
-          {createMutation.isError && (
+          {saveMutation.isError && (
             <div className="p-3 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/40 text-xs rounded-lg flex gap-2">
               <AlertCircle size={14} className="shrink-0" />
-              <span>Failed to create calculated column.</span>
+              <span>Failed to {initialData ? 'update' : 'create'} calculated column. {(saveMutation.error as any)?.response?.data?.detail || ''}</span>
             </div>
           )}
 
@@ -140,10 +160,10 @@ const CalculatedColumnFormModal: React.FC<CalculatedColumnFormModalProps> = ({ i
             </button>
             <button
               type="submit"
-              disabled={createMutation.isPending}
+              disabled={saveMutation.isPending}
               className="flex-1 px-4 py-2 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand-dark transition disabled:opacity-50 shadow-lg shadow-brand/10"
             >
-              {createMutation.isPending ? 'Saving...' : 'Save Calculated Column'}
+              {saveMutation.isPending ? 'Saving...' : `Save Calculated Column`}
             </button>
           </div>
         </form>

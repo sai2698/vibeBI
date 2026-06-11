@@ -320,6 +320,7 @@ class DatasetMetric(Base):
     friendly_name = Column(String(200))
     expression = Column(Text, nullable=False)
     description = Column(Text)
+    is_visible = Column(Boolean, default=True)
 
 class DatasetCalculatedColumn(Base):
     __tablename__ = "dataset_calculated_columns"
