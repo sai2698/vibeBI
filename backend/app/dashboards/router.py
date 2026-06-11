@@ -53,6 +53,11 @@ async def create_dashboard(
     if dash_in.co_owner_ids:
         result = await db.execute(select(User).where(User.id.in_(dash_in.co_owner_ids)))
         db_dashboard.co_owners = list(result.scalars().all())
+
+    db_dashboard.co_owner_roles = []
+    if dash_in.co_owner_role_ids:
+        result = await db.execute(select(Role).where(Role.id.in_(dash_in.co_owner_role_ids)))
+        db_dashboard.co_owner_roles = list(result.scalars().all())
         
     # Default: populated who created it
     if not any(u.id == current_user.id for u in db_dashboard.co_owners):
@@ -71,7 +76,7 @@ async def create_dashboard(
     # Reload with roles to avoid lazy-loading error in async context
     result = await db.execute(
         select(Dashboard)
-        .options(selectinload(Dashboard.roles), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners))
+        .options(selectinload(Dashboard.roles), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners), selectinload(Dashboard.co_owner_roles))
         .where(Dashboard.id == db_dashboard.id)
     )
     db_dashboard = result.scalar_one()
@@ -105,6 +110,7 @@ async def create_dashboard(
         "updated_at": db_dashboard.updated_at,
         "role_ids": [r.id for r in db_dashboard.roles],
         "co_owners": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in db_dashboard.co_owners],
+        "co_owner_role_ids": [r.id for r in db_dashboard.co_owner_roles],
         "is_favorite": False
     }
 
@@ -141,7 +147,8 @@ async def read_dashboards(
         selectinload(Dashboard.roles),
         selectinload(Dashboard.favorited_by),
         selectinload(Dashboard.owner),
-        selectinload(Dashboard.co_owners)
+        selectinload(Dashboard.co_owners),
+        selectinload(Dashboard.co_owner_roles)
     ).where(rbac_filter)
 
     if lob_id:
@@ -182,7 +189,8 @@ async def read_dashboards(
             "updated_at": d.updated_at,
             "is_favorite": any(u.id == current_user.id for u in d.favorited_by),
             "role_ids": [r.id for r in d.roles],
-            "co_owners": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in d.co_owners]
+            "co_owners": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in d.co_owners],
+            "co_owner_role_ids": [r.id for r in d.co_owner_roles]
         })
     return enriched
 
@@ -194,7 +202,7 @@ async def read_dashboard(
 ):
     result = await db.execute(
         select(Dashboard)
-        .options(selectinload(Dashboard.roles), selectinload(Dashboard.favorited_by), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners))
+        .options(selectinload(Dashboard.roles), selectinload(Dashboard.favorited_by), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners), selectinload(Dashboard.co_owner_roles))
         .where(Dashboard.id == dashboard_id)
     )
     dashboard = result.scalar_one_or_none()
@@ -247,7 +255,8 @@ async def read_dashboard(
         "updated_at": dashboard.updated_at,
         "is_favorite": any(u.id == current_user.id for u in dashboard.favorited_by),
         "role_ids": [r.id for r in dashboard.roles],
-        "co_owners": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in dashboard.co_owners]
+        "co_owners": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in dashboard.co_owners],
+        "co_owner_role_ids": [r.id for r in dashboard.co_owner_roles]
     }
 
 @router.patch("/{dashboard_id}", response_model=DashboardResponse)
@@ -259,14 +268,17 @@ async def update_dashboard(
 ):
     result = await db.execute(
         select(Dashboard)
-        .options(selectinload(Dashboard.roles), selectinload(Dashboard.favorited_by), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners))
+        .options(selectinload(Dashboard.roles), selectinload(Dashboard.favorited_by), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners), selectinload(Dashboard.co_owner_roles))
         .where(Dashboard.id == dashboard_id)
     )
     dashboard = result.scalar_one_or_none()
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
 
-    if dashboard.owner_id != current_user.id and current_user.id not in [u.id for u in dashboard.co_owners]:
+    user_role_ids = {r.id for group in current_user.groups for r in group.roles}
+    is_co_owner_by_role = any(r.id in user_role_ids for r in dashboard.co_owner_roles)
+    is_co_owner_by_user = any(u.id == current_user.id for u in dashboard.co_owners)
+    if dashboard.owner_id != current_user.id and not (is_co_owner_by_user or is_co_owner_by_role):
         raise HTTPException(status_code=403, detail="Only owner or co-owner can update dashboard")
 
     update_data = dash_in.model_dump(exclude_unset=True)
@@ -283,6 +295,12 @@ async def update_dashboard(
             u_result = await db.execute(select(User).where(User.id.in_(co_owner_ids)))
             dashboard.co_owners = u_result.scalars().all()
 
+    if "co_owner_role_ids" in update_data:
+        co_owner_role_ids = update_data.pop("co_owner_role_ids")
+        if co_owner_role_ids is not None:
+            c_result = await db.execute(select(Role).where(Role.id.in_(co_owner_role_ids)))
+            dashboard.co_owner_roles = c_result.scalars().all()
+
     for field, value in update_data.items():
         setattr(dashboard, field, value)
 
@@ -291,7 +309,7 @@ async def update_dashboard(
     # Reload with roles and favorites to avoid lazy-loading error
     result = await db.execute(
         select(Dashboard)
-        .options(selectinload(Dashboard.roles), selectinload(Dashboard.favorited_by), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners))
+        .options(selectinload(Dashboard.roles), selectinload(Dashboard.favorited_by), selectinload(Dashboard.owner), selectinload(Dashboard.co_owners), selectinload(Dashboard.co_owner_roles))
         .where(Dashboard.id == dashboard.id)
     )
     dashboard = result.scalar_one()
@@ -328,7 +346,8 @@ async def update_dashboard(
         "updated_at": dashboard.updated_at,
         "is_favorite": any(u.id == current_user.id for u in dashboard.favorited_by),
         "role_ids": [r.id for r in dashboard.roles],
-        "co_owners": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in dashboard.co_owners]
+        "co_owners": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in dashboard.co_owners],
+        "co_owner_role_ids": [r.id for r in dashboard.co_owner_roles]
     }
 
 @router.post("/{dashboard_id}/favorite", status_code=status.HTTP_200_OK)
@@ -359,12 +378,19 @@ async def delete_dashboard(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    result = await db.execute(select(Dashboard).where(Dashboard.id == dashboard_id))
+    result = await db.execute(
+        select(Dashboard)
+        .options(selectinload(Dashboard.co_owners), selectinload(Dashboard.co_owner_roles))
+        .where(Dashboard.id == dashboard_id)
+    )
     dashboard = result.scalar_one_or_none()
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
 
-    if dashboard.owner_id != current_user.id and current_user.id not in [u.id for u in dashboard.co_owners]:
+    user_role_ids = {r.id for group in current_user.groups for r in group.roles}
+    is_co_owner_by_role = any(r.id in user_role_ids for r in dashboard.co_owner_roles)
+    is_co_owner_by_user = any(u.id == current_user.id for u in dashboard.co_owners)
+    if dashboard.owner_id != current_user.id and not (is_co_owner_by_user or is_co_owner_by_role):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     await db.delete(dashboard)

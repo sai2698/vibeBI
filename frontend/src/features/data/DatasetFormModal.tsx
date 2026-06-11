@@ -247,7 +247,7 @@ const DatasetFormModal: React.FC<DatasetFormModalProps> = ({ isOpen, onClose, on
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl animate-in fade-in zoom-in duration-200">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-bold text-slate-900 text-lg">
             {editDataset ? 'Edit Dataset' : 'Create New Dataset'}

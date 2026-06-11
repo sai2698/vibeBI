@@ -384,16 +384,16 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
   );
 
   return (
-    <div ref={containerRef} className="relative inline-block text-left">
+    <div ref={containerRef} className="relative w-full text-left">
       {/* Trigger button — selectedCount state updates cause re-render here,
           but that only happens on selection change, never on open/close */}
       <button
         ref={triggerRef}
         type="button"
         onClick={toggleOpen}
-        className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium hover:border-brand/40 transition-colors min-w-[160px] shadow-sm active:scale-[0.98]"
+        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium hover:border-brand/40 transition-colors min-w-[160px] shadow-sm active:scale-[0.98]"
       >
-        <span className="truncate max-w-[120px] text-slate-700">{buttonLabel}</span>
+        <span className="truncate text-slate-700">{buttonLabel}</span>
 
         <div className="flex items-center gap-1">
           {selectedCount > 0 && (
@@ -420,7 +420,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
         ref={dropdownRef}
         aria-hidden="true"
         inert={true}
-        className="absolute left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden transition-[opacity,transform] duration-150 ease-out opacity-0 -translate-y-1 pointer-events-none"
+        className="absolute left-0 mt-2 w-full min-w-[200px] bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden transition-[opacity,transform] duration-150 ease-out opacity-0 -translate-y-1 pointer-events-none"
       >
         <div className="p-3 border-b border-slate-100 bg-slate-50/50">
           <div className="relative">
@@ -442,13 +442,14 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
         ) : filteredOptions.length === 0 ? (
           <div className="p-4 text-center text-slate-400 text-xs italic">No results found</div>
         ) : (
+          // @ts-ignore - List properties mismatched with typedef but works at runtime
           <List
             rowComponent={OptionRow}
             rowCount={filteredOptions.length}
             rowHeight={ITEM_HEIGHT}
             rowProps={rowProps}
             overscanCount={3}
-            style={{ height: LIST_HEIGHT, width: "100%" }}
+            style={{ height: Math.min(filteredOptions.length * ITEM_HEIGHT, LIST_HEIGHT), width: "100%" }}
           />
         )}
 

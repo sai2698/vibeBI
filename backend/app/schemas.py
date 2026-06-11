@@ -396,6 +396,7 @@ class DashboardBase(BaseModel):
 class DashboardCreate(DashboardBase):
     role_ids: List[int] = []
     co_owner_ids: List[UUID] = []
+    co_owner_role_ids: List[int] = []
 
 class DashboardUpdate(BaseModel):
     title: Optional[str] = None
@@ -423,6 +424,7 @@ class DashboardUpdate(BaseModel):
     llm_config: Optional[dict] = None
     role_ids: Optional[List[int]] = None
     co_owner_ids: Optional[List[UUID]] = None
+    co_owner_role_ids: Optional[List[int]] = None
     cache_config: Optional[dict] = None
 
 class DashboardResponse(DashboardBase):
@@ -434,6 +436,7 @@ class DashboardResponse(DashboardBase):
     is_favorite: bool = False
     role_ids: List[int] = []
     co_owners: List[UserResponseBasic] = []
+    co_owner_role_ids: List[int] = []
     class Config:
         from_attributes = True
 

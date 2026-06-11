@@ -3,6 +3,7 @@ import { X, Settings2, Palette, Image as ImageIcon, Type, Layout, Save, Shield, 
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api';
 import { ECHARTS_THEMES } from '../../components/charts/themes';
+import MultiSelect from '../../components/ui/MultiSelect';
 
 interface DashboardSettings {
   id?: number;
@@ -21,6 +22,7 @@ interface DashboardSettings {
   row_height: number;
   role_ids: number[];
   co_owner_ids?: string[];
+  co_owner_role_ids?: number[];
   filter_config: any[];
   echarts_theme?: string;
   llm_config?: {
@@ -50,41 +52,7 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
   const [localSettings, setLocalSettings] = useState<DashboardSettings>(settings);
   const [expandedSection, setExpandedSection] = useState<string>('general');
 
-  const MultiSelectDropdown = ({ options, selectedIds, onChange, placeholder }: any) => {
-    const [open, setOpen] = useState(false);
-    const toggle = (id: any) => {
-      if (selectedIds?.includes(id)) {
-        onChange(selectedIds.filter((x: any) => x !== id));
-      } else {
-        onChange([...(selectedIds || []), id]);
-      }
-    };
-    return (
-      <div className="relative">
-        <div
-          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 cursor-pointer flex justify-between items-center relative z-10"
-          onClick={() => setOpen(!open)}
-        >
-          <div className="truncate pr-2 text-slate-500">
-            {selectedIds?.length > 0 ? `${selectedIds.length} selected` : placeholder}
-          </div>
-        </div>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto custom-scrollbar">
-              {options?.map((opt: any) => (
-                <label key={opt.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
-                  <input type="checkbox" className="rounded text-brand" checked={selectedIds?.includes(opt.id)} onChange={() => toggle(opt.id)} />
-                  <span className="text-xs text-slate-700 dark:text-slate-200">{opt.label}</span>
-                </label>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
+
 
   React.useEffect(() => {
     if (isOpen) {
@@ -133,14 +101,44 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
     return [...ECHARTS_THEMES, ...custom];
   }, [dbThemes]);
 
-  const toggleRole = (roleId: number) => {
-    const currentRoles = localSettings.role_ids || [];
-    if (currentRoles.includes(roleId)) {
-      handleChange('role_ids', currentRoles.filter(id => id !== roleId));
-    } else {
-      handleChange('role_ids', [...currentRoles, roleId]);
-    }
+  const roleOptions = React.useMemo(() => availableRoles?.map((r: any) => r.name) || [], [availableRoles]);
+  const userOptions = React.useMemo(() => users?.map((u: any) => `${u.full_name || ''} (${u.email})`.trim()) || [], [users]);
+
+  const selectedRoleNames = React.useMemo(() => {
+    return localSettings.role_ids?.map(id => availableRoles?.find((r: any) => r.id === id)?.name).filter(Boolean) as string[] || [];
+  }, [localSettings.role_ids, availableRoles]);
+
+  const selectedCoOwnerUserNames = React.useMemo(() => {
+    return localSettings.co_owner_ids?.map(id => {
+      const u = users?.find((user: any) => user.id === id);
+      return u ? `${u.full_name || ''} (${u.email})`.trim() : null;
+    }).filter(Boolean) as string[] || [];
+  }, [localSettings.co_owner_ids, users]);
+
+  const selectedCoOwnerRoleNames = React.useMemo(() => {
+    return localSettings.co_owner_role_ids?.map(id => availableRoles?.find((r: any) => r.id === id)?.name).filter(Boolean) as string[] || [];
+  }, [localSettings.co_owner_role_ids, availableRoles]);
+
+  const handleRolesChange = (names: string[]) => {
+    const ids = names.map(n => availableRoles?.find((r: any) => r.name === n)?.id).filter(Boolean) as number[];
+    handleChange('role_ids', ids);
   };
+
+  const handleCoOwnerUsersChange = (names: string[]) => {
+    const ids = names.map(n => {
+      const match = n.match(/\((.*?)\)$/);
+      const email = match ? match[1] : n;
+      const u = users?.find((user: any) => user.email === email);
+      return u?.id;
+    }).filter(Boolean) as string[];
+    handleChange('co_owner_ids', ids);
+  };
+
+  const handleCoOwnerRolesChange = (names: string[]) => {
+    const ids = names.map(n => availableRoles?.find((r: any) => r.name === n)?.id).filter(Boolean) as number[];
+    handleChange('co_owner_role_ids', ids);
+  };
+
 
   if (!isOpen) return null;
 
@@ -432,21 +430,36 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Visible to Roles</label>
-                  <MultiSelectDropdown
-                    options={availableRoles?.map(r => ({ id: r.id, label: r.name })) || []}
-                    selectedIds={localSettings.role_ids}
-                    onChange={(ids: any) => handleChange('role_ids', ids)}
-                    placeholder="Select roles..."
-                  />
+                  <div className="w-full">
+                    <MultiSelect
+                      options={roleOptions}
+                      selectedValues={selectedRoleNames}
+                      onChange={handleRolesChange}
+                      placeholder="Search and select roles..."
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Co-Owners</label>
-                  <MultiSelectDropdown
-                    options={users?.map(u => ({ id: u.id, label: u.full_name || u.email })) || []}
-                    selectedIds={localSettings.co_owner_ids || []}
-                    onChange={(ids: any) => handleChange('co_owner_ids', ids)}
-                    placeholder="Select users..."
-                  />
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Co-Owner Roles</label>
+                  <div className="w-full">
+                    <MultiSelect
+                      options={roleOptions}
+                      selectedValues={selectedCoOwnerRoleNames}
+                      onChange={handleCoOwnerRolesChange}
+                      placeholder="Search and select roles..."
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Co-Owner Users</label>
+                  <div className="w-full">
+                    <MultiSelect
+                      options={userOptions}
+                      selectedValues={selectedCoOwnerUserNames}
+                      onChange={handleCoOwnerUsersChange}
+                      placeholder="Search and select users..."
+                    />
+                  </div>
                 </div>
               </div>
             </div>

@@ -166,6 +166,7 @@ class Dashboard(Base):
     favorited_by = relationship("User", secondary="dashboard_favorites", backref="favorite_dashboards")
     owner = relationship("User", foreign_keys=[owner_id])
     co_owners = relationship("User", secondary="dashboard_co_owners", backref="co_owned_dashboards")
+    co_owner_roles = relationship("Role", secondary="dashboard_co_owner_roles", backref="co_owned_dashboards")
 
 class DashboardOwner(Base):
     __tablename__ = "dashboard_co_owners"
@@ -174,6 +175,11 @@ class DashboardOwner(Base):
 
 class DashboardRole(Base):
     __tablename__ = "dashboard_roles"
+    dashboard_id = Column(Integer, ForeignKey("dashboards.id", ondelete="CASCADE"), primary_key=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)
+
+class DashboardCoOwnerRole(Base):
+    __tablename__ = "dashboard_co_owner_roles"
     dashboard_id = Column(Integer, ForeignKey("dashboards.id", ondelete="CASCADE"), primary_key=True)
     role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)
 
