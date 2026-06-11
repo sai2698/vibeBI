@@ -24,6 +24,8 @@ import { buildCalendarChartOptions, calendarChartConfigSchema } from './Calendar
 import { buildChordChartOptions, chordChartConfigSchema } from './ChordChart';
 import { buildDataTableChartOptions, dataTableChartConfigSchema } from './DataTableChart';
 import { buildPivotTableChartOptions, pivotTableChartConfigSchema } from './PivotTableChart';
+import { buildMultiKPITileChartOptions, multiKpiTileChartConfigSchema } from './MultiKPITileChart';
+import { buildGeoMapChartOptions, geoMapChartConfigSchema } from './GeoMapChart';
 
 export {
   buildBarChartOptions, barChartConfigSchema,
@@ -44,7 +46,9 @@ export {
   buildCalendarChartOptions, calendarChartConfigSchema,
   buildChordChartOptions, chordChartConfigSchema,
   buildDataTableChartOptions, dataTableChartConfigSchema,
-  buildPivotTableChartOptions, pivotTableChartConfigSchema
+  buildPivotTableChartOptions, pivotTableChartConfigSchema,
+  buildMultiKPITileChartOptions, multiKpiTileChartConfigSchema,
+  buildGeoMapChartOptions, geoMapChartConfigSchema
 };
 
 // Helper to get chart config schema by chart type
@@ -71,6 +75,8 @@ export function getChartConfigSchema(chartType: string): ChartConfigSchema | und
     table: dataTableChartConfigSchema,
     pivotTable: pivotTableChartConfigSchema,
     pivot: pivotTableChartConfigSchema,
+    multikpi: multiKpiTileChartConfigSchema,
+    geomap: geoMapChartConfigSchema,
   };
   return schemas[chartType];
 }

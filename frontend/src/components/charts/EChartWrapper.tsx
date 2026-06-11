@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
 import type { EChartsOption } from 'echarts';
 import { registerAllThemes, getThemeMeta } from './themes';
 import { useQuery } from '@tanstack/react-query';
@@ -26,10 +27,10 @@ import {
   buildGaugeChartOptions,
 } from './types';
 
-// React-based chart components (not ECharts)
 import { DataTableChart } from './types/DataTableChart';
 import { PivotTableChart } from './types/PivotTableChart';
 import { KPITileChart } from './types/KPITileChart';
+import { MultiKPITileChart } from './types/MultiKPITileChart';
 
 // Run custom themes registration on startup
 registerAllThemes();
@@ -62,6 +63,8 @@ export type ChartType =
   | 'pivotTable'
   | 'table'
   | 'pivot'
+  | 'multikpi'
+  | 'geomap'
   | 'custom';
 
 interface ChartData {
@@ -108,6 +111,8 @@ const brandColors = [
 const CARTESIAN_CHART_TYPES = new Set([
   'bar', 'line', 'area', 'scatter', 'heatmap', 'boxplot', 'pictorialBar',
 ]);
+
+import { buildGeoMapChartOptions } from './types/GeoMapChart';
 
 function buildOption(chartType: ChartType, dataInput: ChartData, _title?: string, visualConfig?: any, theme?: string, themeMeta?: any): EChartsOption {
   const data = {
@@ -370,6 +375,16 @@ function buildOption(chartType: ChartType, dataInput: ChartData, _title?: string
         } as any,
       });
 
+    case 'geomap':
+      return buildGeoMapChartOptions({
+        categories: data.categories,
+        series: data.series as any,
+        visualConfig: {
+          ...visualConfig,
+          colorPalette: cfg.colorPalette,
+        } as any,
+      });
+
     // Fallback for other chart types - basic implementation
     case 'boxplot':
       return {
@@ -534,9 +549,38 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
   const lastMouseCoords = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   // Tracks the last element the pointer hovered over — used by non-Cartesian contextmenu
   const lastHoveredItem = useRef<{ categoryValue: string; dataValue: number | string; seriesName: string } | null>(null);
-  // Tracks active brush selection so right-clicks inside the brush don't revert to single selection
   const activeBrushSelectionRef = useRef<Set<string>>(new Set());
   const isPieMultiSelectModeRef = useRef<boolean>(false);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  
+  const mapRegion = (visualConfig as any)?.map?.region || 'world';
+
+  useEffect(() => {
+    if (chartType === 'geomap') {
+      if (echarts.getMap(mapRegion)) {
+        setIsMapLoaded(true);
+      } else {
+        setIsMapLoaded(false);
+        let url = 'https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/json/world.json';
+        if (mapRegion === 'india') {
+          url = 'https://raw.githubusercontent.com/adarshbiradar/maps-geojson/master/india.json';
+        } else if (mapRegion !== 'world') {
+          url = `https://raw.githubusercontent.com/adarshbiradar/maps-geojson/master/states/${mapRegion}.json`;
+        }
+
+        fetch(url)
+          .then(res => res.json())
+          .then(mapJson => {
+            echarts.registerMap(mapRegion, mapJson);
+            setIsMapLoaded(true);
+          })
+          .catch(err => {
+            console.error(`Failed to load map data for ${mapRegion}:`, err);
+            toast.error(`Failed to load map data for ${mapRegion}`);
+          });
+      }
+    }
+  }, [chartType, mapRegion]);
 
   const handleChartContextMenu = useCallback((e: React.MouseEvent) => {
     lastMouseCoords.current = { x: e.clientX, y: e.clientY };
@@ -845,7 +889,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
 
     // Brush end event for menu popup
     instance.off('brushEnd');
-    instance.on('brushEnd', (params: any) => {
+    instance.on('brushEnd', () => {
       if (!onFilterByValueRef.current) return;
       if (activeBrushSelectionRef.current.size > 0) {
         setDrillMenu({
@@ -1193,7 +1237,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
     );
   }
 
-  if (chartType === 'kpi') {
+  if (chartType === 'kpi' || chartType === 'multikpi') {
     return (
       <>
         <div
@@ -1228,15 +1272,50 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             </div>
           )}
           <div className="flex-1 w-full min-h-0 flex items-center justify-center">
-            <KPITileChart
-              categories={data.categories}
-              dimensions={data.dimensions}
-              series={data.series}
-              visualConfig={visualConfig}
-              themeMeta={themeMeta}
-            />
+            {chartType === 'kpi' ? (
+              <KPITileChart
+                categories={data.categories}
+                dimensions={data.dimensions}
+                series={data.series}
+                visualConfig={visualConfig}
+                themeMeta={themeMeta}
+                onDrillContextMenu={handleReactChartContextMenu}
+              />
+            ) : (
+              <MultiKPITileChart
+                dimensions={data.dimensions}
+                series={data.series}
+                visualConfig={visualConfig}
+                themeMeta={themeMeta}
+                onDrillContextMenu={handleReactChartContextMenu}
+              />
+            )}
           </div>
         </div>
+        
+        {/* Drill Context Menu for KPI */}
+        {drillMenu && (
+          <DrillContextMenu
+            x={drillMenu.x}
+            y={drillMenu.y}
+            clickInfo={drillMenu.info}
+            availableColumns={availableColumns}
+            currentDimension={currentDimensionName}
+            canDrillUp={(drillStack?.length ?? 0) > 0}
+            onDrillDown={(targetCol) => {
+              onDrillDown?.(drillMenu.info.dimensionName, targetCol, toSentinelValue(drillMenu.info.categoryValue));
+            }}
+            onDrillUp={() => onDrillUp?.()}
+            onFilterByValue={() => {
+              onFilterByValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
+            }}
+            onExcludeValue={() => {
+              onExcludeValue?.(drillMenu.info.dimensionName, toSentinelValue(drillMenu.info.categoryValue));
+            }}
+            onResetDrill={(drillStack?.length ?? 0) > 0 ? onResetDrill : undefined}
+            onClose={() => setDrillMenu(null)}
+          />
+        )}
       </>
     );
   }
@@ -1348,15 +1427,22 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
       {/* Drill Breadcrumbs moved to DashboardWidget (rendered in portal) */}
 
       <div className="flex-1 w-full flex items-center justify-center min-h-0">
-        <ReactECharts
-          option={mergedOption}
-          style={{ height: '100%', width: '100%' }}
-          theme={theme && theme !== 'default' ? theme : undefined}
-          notMerge={true}
-          lazyUpdate={true}
-          opts={{ renderer: 'canvas' }}
-          onChartReady={handleChartReady}
-        />
+        {chartType === 'geomap' && !isMapLoaded ? (
+          <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
+             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+             <span className="text-sm font-medium">Loading Map Data...</span>
+          </div>
+        ) : (
+          <ReactECharts
+            option={mergedOption}
+            style={{ height: '100%', width: '100%' }}
+            theme={theme && theme !== 'default' ? theme : undefined}
+            notMerge={true}
+            lazyUpdate={true}
+            opts={{ renderer: 'canvas' }}
+            onChartReady={handleChartReady}
+          />
+        )}
       </div>
 
       {/* Drill Context Menu */}

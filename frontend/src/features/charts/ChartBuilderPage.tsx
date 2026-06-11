@@ -15,7 +15,7 @@ import {
   Box, Share2, GitBranch, Grid, Disc, Columns,
   GitPullRequest, Gauge, AlignLeft, Calendar,
   Layers, Table as TableIcon, LayoutGrid, Loader2, Folder, FileCode2, SaveAll, Settings2,
-  AlertTriangle, AlertCircle, ArrowUpDown, CalendarDays
+  AlertTriangle, AlertCircle, ArrowUpDown, CalendarDays, Map
 } from 'lucide-react';
 import SaveAssetModal from './components/SaveAssetModal';
 import DynamicChartControls from './components/DynamicChartControls';
@@ -57,6 +57,8 @@ const chartTypes: { type: ChartType; label: string; icon: React.ReactNode }[] = 
   { type: 'calendar', label: 'Calendar', icon: <Calendar size={18} /> },
   { type: 'chord', label: 'Chord', icon: <Disc size={18} /> },
   { type: 'kpi', label: 'KPI Tile', icon: <Hash size={18} /> },
+  { type: 'multikpi', label: 'Multi KPI', icon: <LayoutGrid size={18} /> },
+  { type: 'geomap', label: 'Geo Map', icon: <Map size={18} /> },
   { type: 'table', label: 'Data Table', icon: <TableIcon size={18} /> },
   { type: 'pivot', label: 'Pivot Table', icon: <LayoutGrid size={18} /> },
 ];
@@ -78,6 +80,8 @@ interface ChartSpec {
 
 const CHART_SPEC: Record<string, ChartSpec> = {
   kpi:        { minDim: 0, maxDim: 0, minMet: 1, maxMet: 1, msg: 'KPI needs exactly 1 measure, no dimensions' },
+  multikpi:   { minDim: 0, maxDim: 0, minMet: 1, msg: 'Multi KPI needs 1+ measures, no dimensions' },
+  geomap:     { minDim: 1, maxDim: 1, minMet: 1, maxMet: 1, msg: 'Geo Map needs exactly 1 location dimension and 1 measure' },
   gauge:      { minDim: 0, maxDim: 0, minMet: 1, maxMet: 1, msg: 'Gauge needs exactly 1 measure, no dimensions' },
   table:      { minDim: 0, minMet: 0, msg: 'Table needs at least 1 dimension or 1 measure' },
   pivot:      { minDim: 1, minMet: 1, minPivotCols: 1, requiresPivotCols: true, msg: 'Pivot needs 1+ row dims, 1+ column dims, and 1 measure', dimLabel: 'Rows', metLabel: 'Measures' },
