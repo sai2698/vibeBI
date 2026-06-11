@@ -72,7 +72,7 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
         {open && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto custom-scrollbar">
+            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto custom-scrollbar">
               {options?.map((opt: any) => (
                 <label key={opt.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
                   <input type="checkbox" className="rounded text-brand" checked={selectedIds?.includes(opt.id)} onChange={() => toggle(opt.id)} />
@@ -202,11 +202,11 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
 
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
         {/* General Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-all relative ${expandedSection === 'general' ? 'z-30' : 'z-10'}`}>
           <button 
             type="button" 
             onClick={() => setExpandedSection(expandedSection === 'general' ? '' : 'general')}
-            className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors"
+            className={`w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors ${expandedSection === 'general' ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <div className="flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">
               <Type size={14} className="text-slate-400" /> General Info
@@ -230,11 +230,11 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
         </div>
 
         {/* Visuals Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-all relative ${expandedSection === 'visuals' ? 'z-30' : 'z-10'}`}>
           <button 
             type="button" 
             onClick={() => setExpandedSection(expandedSection === 'visuals' ? '' : 'visuals')}
-            className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors"
+            className={`w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors ${expandedSection === 'visuals' ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <div className="flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">
               <Palette size={14} className="text-slate-400" /> Styling & Branding
@@ -348,11 +348,11 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
         </div>
 
         {/* Layout Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-all relative ${expandedSection === 'layout' ? 'z-30' : 'z-10'}`}>
           <button 
             type="button" 
             onClick={() => setExpandedSection(expandedSection === 'layout' ? '' : 'layout')}
-            className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors"
+            className={`w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors ${expandedSection === 'layout' ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <div className="flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">
               <Layout size={14} className="text-slate-400" /> Layout & Grid
@@ -413,11 +413,11 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
         </div>
 
         {/* Access Control Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-all relative ${expandedSection === 'access' ? 'z-30' : 'z-10'}`}>
           <button 
             type="button" 
             onClick={() => setExpandedSection(expandedSection === 'access' ? '' : 'access')}
-            className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors"
+            className={`w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between hover:bg-slate-100/50 transition-colors ${expandedSection === 'access' ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <div className="flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">
               <Shield size={14} className="text-slate-400" /> Permissions & Access
@@ -454,11 +454,11 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
         </div>
 
         {/* AI Assistant Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-all relative ${expandedSection === 'ai' ? 'z-30' : 'z-10'}`}>
           <button 
             type="button" 
             onClick={() => setExpandedSection(expandedSection === 'ai' ? '' : 'ai')}
-            className="w-full px-4 py-3 bg-brand/5 dark:bg-brand/10 flex items-center justify-between hover:bg-brand/10 transition-colors"
+            className={`w-full px-4 py-3 bg-brand/5 dark:bg-brand/10 flex items-center justify-between hover:bg-brand/10 transition-colors ${expandedSection === 'ai' ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <div className="flex items-center gap-2 text-[11px] font-bold text-brand uppercase tracking-widest">
               <Shield size={14} /> AI Assistant Settings
@@ -511,11 +511,11 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
           )}
         </div>
         {/* Cache Settings Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-all relative ${expandedSection === 'cache' ? 'z-30' : 'z-10'}`}>
           <button 
             type="button" 
             onClick={() => setExpandedSection(expandedSection === 'cache' ? '' : 'cache')}
-            className="w-full px-4 py-3 bg-amber-500/5 dark:bg-amber-500/10 flex items-center justify-between hover:bg-amber-500/10 transition-colors"
+            className={`w-full px-4 py-3 bg-amber-500/5 dark:bg-amber-500/10 flex items-center justify-between hover:bg-amber-500/10 transition-colors ${expandedSection === 'cache' ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <div className="flex items-center gap-2 text-[11px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-widest">
               <Zap size={14} /> Cache Settings
