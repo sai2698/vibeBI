@@ -391,6 +391,8 @@ class DashboardBase(BaseModel):
     title_font_size: Optional[int] = 15
     subtitle_font_size: Optional[int] = 10
     logo_size: Optional[str] = "medium"
+    enable_pages: Optional[bool] = False
+    pages: Optional[List[Any]] = []
     filter_config: Optional[List[Any]] = []
     filter_presets: Optional[List[Any]] = []
     logo_url: Optional[str] = None
@@ -422,6 +424,8 @@ class DashboardUpdate(BaseModel):
     title_font_size: Optional[int] = None
     subtitle_font_size: Optional[int] = None
     logo_size: Optional[str] = None
+    enable_pages: Optional[bool] = None
+    pages: Optional[List[Any]] = None
     filter_config: Optional[List[Any]] = None
     filter_presets: Optional[List[Any]] = None
     logo_url: Optional[str] = None

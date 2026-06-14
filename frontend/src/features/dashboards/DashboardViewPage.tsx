@@ -82,6 +82,14 @@ interface DashboardLayoutItem {
   };
 }
 
+interface DashboardPage {
+  id: string;
+  name: string;
+  layout: DashboardLayoutItem[];
+  filter_config: FilterDef[];
+  filter_presets: FilterPreset[];
+}
+
 interface Dashboard {
   id: number;
   title: string;
@@ -96,6 +104,8 @@ interface Dashboard {
   title_font_size?: number;
   subtitle_font_size?: number;
   logo_size?: string;
+  enable_pages?: boolean;
+  pages?: DashboardPage[];
   filter_config?: FilterDef[];
   filter_presets?: FilterPreset[];
   logo_url?: string;
@@ -328,6 +338,8 @@ const DashboardViewPage: React.FC = () => {
   const [layout, setLayout] = useState<DashboardLayoutItem[]>([]);
   const [showAddChart, setShowAddChart] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [pages, setPages] = useState<DashboardPage[]>([]);
+  const [activePageId, setActivePageId] = useState<string>('');
 
   // New State for Filters and Refresh
   const [globalFilters, setGlobalFilters] = useState<Record<string, any>>({});
@@ -509,7 +521,7 @@ const DashboardViewPage: React.FC = () => {
       children
     };
   }, [globalFilters, chartsDrillFilters]);
-  const [hasLoadedDefaults, setHasLoadedDefaults] = useState(false);
+
   const [refreshInterval, setRefreshInterval] = useState<number | false>(false);
   const [isFilterBarOpen, setIsFilterBarOpen] = useState(true);
   const [isFiltersPanelOpen, setIsFiltersPanelOpen] = useState(false);
@@ -751,22 +763,41 @@ const DashboardViewPage: React.FC = () => {
     }
   };
 
-  // Initialize layout from dashboard data
+  // Initialize layout and pages from dashboard data
   useEffect(() => {
-    if (dashboard?.layout) {
-      setLayout(Array.isArray(dashboard.layout) ? dashboard.layout : []);
+    if (dashboard) {
+      if (dashboard.pages && dashboard.pages.length > 0) {
+        setPages(dashboard.pages);
+        if (!activePageId || !dashboard.pages.find(p => p.id === activePageId)) {
+          setActivePageId(dashboard.pages[0].id);
+        }
+      } else {
+        // Fallback for legacy dashboards without pages
+        const defaultPage: DashboardPage = {
+          id: 'default_page_1',
+          name: 'Page 1',
+          layout: Array.isArray(dashboard.layout) ? dashboard.layout : [],
+          filter_config: pages.find(p => p.id === activePageId)?.filter_config || [],
+          filter_presets: pages.find(p => p.id === activePageId)?.filter_presets || [],
+        };
+        setPages([defaultPage]);
+        setActivePageId(defaultPage.id);
+      }
     }
   }, [dashboard]);
 
-  // Load default filters on mount
+  // Sync active page state down to layout and filters
   useEffect(() => {
-    if (dashboard && !hasLoadedDefaults) {
+    const page = pages.find(p => p.id === activePageId);
+    if (page) {
+      setLayout(page.layout);
+      
       let initialFilters: Record<string, any> = {};
       let appliedPreset = false;
 
       // Try loading from default preset first
-      if (dashboard.filter_presets) {
-        const defaultPreset = dashboard.filter_presets.find(p => p.is_default);
+      if (page.filter_presets) {
+        const defaultPreset = page.filter_presets.find(p => p.is_default);
         if (defaultPreset && defaultPreset.state) {
           initialFilters = { ...defaultPreset.state };
           appliedPreset = true;
@@ -774,8 +805,8 @@ const DashboardViewPage: React.FC = () => {
       }
 
       // If no default preset was applied, apply individual filter default_values
-      if (!appliedPreset && dashboard.filter_config) {
-        dashboard.filter_config.forEach(f => {
+      if (!appliedPreset && page.filter_config) {
+        page.filter_config.forEach(f => {
           if (f.default_value) {
             const resolved = resolveDynamicVariables(f.default_value);
             if (f.type === 'select') {
@@ -787,18 +818,29 @@ const DashboardViewPage: React.FC = () => {
         });
       }
 
-      if (Object.keys(initialFilters).length > 0) {
-        setGlobalFilters(initialFilters);
-        setStagedFilters(initialFilters);
-      }
+      setGlobalFilters(initialFilters);
+      setStagedFilters(initialFilters);
       
-      setHasLoadedDefaults(true);
+      // Reset history stack for the new page
+      isRestoringHistory.current = true;
+      setHistoryState({
+        history: [{ globalFilters: initialFilters, chartsDrillStacks: {} }],
+        index: 0
+      });
+      setTimeout(() => { isRestoringHistory.current = false; }, 200);
     }
-  }, [dashboard, hasLoadedDefaults]);
+  }, [activePageId, pages.length]);
+
+  // Sync local layout changes back to pages state
+  useEffect(() => {
+    if (activePageId && isLayoutReady) {
+      setPages(prev => prev.map(p => p.id === activePageId ? { ...p, layout } : p));
+    }
+  }, [layout]);
 
   const saveMutation = useMutation({
-    mutationFn: (newLayout: DashboardLayoutItem[]) =>
-      api.patch(`/api/dashboards/${id}`, { layout: newLayout }),
+    mutationFn: (newPages: DashboardPage[]) =>
+      api.patch(`/api/dashboards/${id}`, { pages: newPages }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dashboards', id] });
       setIsEditing(false);
@@ -870,7 +912,9 @@ const DashboardViewPage: React.FC = () => {
       drill_stacks: saveDrillFilters ? chartsDrillStacks : undefined
     };
 
-    let updatedPresets = [...(dashboard?.filter_presets || [])];
+    const activePage = pages.find(p => p.id === activePageId);
+    if (!activePage) return;
+    let updatedPresets = [...(activePage.filter_presets || [])];
     
     // If setting as default, unset others
     if (newViewIsDefault) {
@@ -879,7 +923,9 @@ const DashboardViewPage: React.FC = () => {
     
     updatedPresets.push(newPreset);
     
-    updateSettingsMutation.mutate({ filter_presets: updatedPresets });
+    const newPages = pages.map(p => p.id === activePageId ? { ...p, filter_presets: updatedPresets } : p);
+    setPages(newPages);
+    saveMutation.mutate(newPages);
     setIsSaveViewModalOpen(false);
     setNewViewName('');
     setNewViewIsDefault(false);
@@ -901,8 +947,12 @@ const DashboardViewPage: React.FC = () => {
 
   const handleDeletePreset = (e: React.MouseEvent, presetId: string) => {
     e.stopPropagation();
-    const updatedPresets = (dashboard?.filter_presets || []).filter(p => p.id !== presetId);
-    updateSettingsMutation.mutate({ filter_presets: updatedPresets });
+    const activePage = pages.find(p => p.id === activePageId);
+    if (!activePage) return;
+    const updatedPresets = (activePage.filter_presets || []).filter(p => p.id !== presetId);
+    const newPages = pages.map(p => p.id === activePageId ? { ...p, filter_presets: updatedPresets } : p);
+    setPages(newPages);
+    saveMutation.mutate(newPages);
   };
 
 
@@ -984,7 +1034,7 @@ const DashboardViewPage: React.FC = () => {
                 <Plus size={14} /> Add Widget
               </button>
               <button
-                onClick={() => saveMutation.mutate(layout)}
+                onClick={() => saveMutation.mutate(pages)}
                 disabled={saveMutation.isPending}
                 className="bg-brand text-white px-4 py-1.5 border border-brand rounded-md text-xs font-bold shadow-sm hover:bg-brand-dark transition transform active:scale-95 flex items-center gap-1.5"
               >
@@ -1261,15 +1311,77 @@ const DashboardViewPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Metabase-Style Filter Bar */}
+      {/* Dashboard Pages Tabs */}
+      {dashboard?.enable_pages && (
+        <div className="flex items-center gap-1 px-4 pt-2 bg-slate-50 border-b border-slate-200 overflow-x-auto custom-scrollbar shrink-0">
+        {pages.map((page) => (
+          <div
+            key={page.id}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-colors cursor-pointer select-none whitespace-nowrap min-w-[100px] group ${
+              activePageId === page.id 
+                ? 'border-brand bg-white text-brand font-bold' 
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+            }`}
+            onClick={() => setActivePageId(page.id)}
+          >
+            {isEditing ? (
+              <input
+                value={page.name}
+                onChange={(e) => {
+                  setPages(prev => prev.map(p => p.id === page.id ? { ...p, name: e.target.value } : p));
+                }}
+                className="bg-transparent outline-none w-24 text-inherit font-inherit"
+                placeholder="Page Name"
+              />
+            ) : (
+              <span>{page.name}</span>
+            )}
+            
+            {isEditing && pages.length > 1 && (
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  const newPages = pages.filter(p => p.id !== page.id);
+                  setPages(newPages);
+                  if (activePageId === page.id) setActivePageId(newPages[0].id);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          </div>
+        ))}
+        {isEditing && (
+          <button
+            onClick={() => {
+              const newPage: DashboardPage = {
+                id: `page_${Date.now()}`,
+                name: `Page ${pages.length + 1}`,
+                layout: [],
+                filter_config: [],
+                filter_presets: []
+              };
+              setPages([...pages, newPage]);
+              setActivePageId(newPage.id);
+            }}
+            className="flex items-center gap-1 px-3 py-2 text-xs rounded-t-lg transition-colors ml-1 text-slate-500 hover:text-brand font-bold hover:bg-brand/5"
+          >
+            <Plus size={14} /> Add Page
+          </button>
+        )}
+      </div>
+      )}
+
+      {/* Metabase-style Active Filter Summary Bar */}
       {isFilterBarOpen && (
         <div
           className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-300 sticky top-[57px] z-20"
         >
           <div className="flex flex-wrap items-center gap-3 w-full">
-          {(dashboard?.filter_config || []).length > 0 ? (
+          {(pages.find(p => p.id === activePageId)?.filter_config || []).length > 0 ? (
             <div className="flex flex-wrap items-center gap-3 w-full">
-              {(dashboard?.filter_config || []).map((f: any) => (
+              {(pages.find(p => p.id === activePageId)?.filter_config || []).map((f: any) => (
                 <DashboardFilter
                   key={f.id}
                   filter={f}
@@ -1278,7 +1390,7 @@ const DashboardViewPage: React.FC = () => {
                   openFilterId={openFilterId}
                   setOpenFilterId={setOpenFilterId}
                   isMobile={isMobile}
-                  allFilters={dashboard?.filter_config || []}
+                  allFilters={pages.find(p => p.id === activePageId)?.filter_config || []}
                 />
               ))}
               
@@ -1331,10 +1443,10 @@ const DashboardViewPage: React.FC = () => {
                       </div>
                       
                       <div className="max-h-60 overflow-y-auto custom-scrollbar flex flex-col gap-0.5 px-1.5">
-                        {!(dashboard?.filter_presets?.length) ? (
+                        {!(pages.find(p => p.id === activePageId)?.filter_presets?.length) ? (
                           <div className="py-4 text-center text-slate-400 italic font-medium px-2">No saved views yet.</div>
                         ) : (
-                          dashboard.filter_presets.map((preset) => (
+                          (pages.find(p => p.id === activePageId)?.filter_presets || []).map((preset) => (
                             <div
                               key={preset.id}
                               onClick={() => handleApplyPreset(preset)}
@@ -1399,8 +1511,8 @@ const DashboardViewPage: React.FC = () => {
         } : {}}
       >
         {(() => {
-          const missingRequiredFilters = (dashboard?.filter_config || []).filter(
-            (f) => f.is_required && (globalFilters[f.column] === undefined || globalFilters[f.column] === '' || (Array.isArray(globalFilters[f.column]) && globalFilters[f.column].length === 0))
+          const missingRequiredFilters = (pages.find(p => p.id === activePageId)?.filter_config || []).filter(
+            f => f.is_required && (!stagedFilters[f.column] || (Array.isArray(stagedFilters[f.column]) && stagedFilters[f.column].length === 0))
           );
           
           if (missingRequiredFilters.length > 0 && !isEditing) {
@@ -1799,7 +1911,7 @@ const DashboardViewPage: React.FC = () => {
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Filters to be saved:</span>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(globalFilters).map(([k, v]) => {
-                    const filterDef = dashboard?.filter_config?.find(f => f.column === k);
+                    const filterDef = pages.find(p => p.id === activePageId)?.filter_config?.find(f => f.column === k);
                     const label = filterDef ? filterDef.label : k;
                     const val = Array.isArray(v) ? v.join(', ') : v;
                     return (
@@ -1836,9 +1948,11 @@ const DashboardViewPage: React.FC = () => {
         <DashboardFiltersPanel
           isOpen={isFiltersPanelOpen}
           onClose={() => setIsFiltersPanelOpen(false)}
-          filters={dashboard.filter_config || []}
+          filters={pages.find(p => p.id === activePageId)?.filter_config || []}
           onSave={(newFilters) => {
-            handleUpdateSettings({ filter_config: newFilters });
+            const newPages = pages.map(p => p.id === activePageId ? { ...p, filter_config: newFilters } : p);
+            setPages(newPages);
+            saveMutation.mutate(newPages);
             setIsFiltersPanelOpen(false);
           }}
         />
@@ -1864,7 +1978,8 @@ const DashboardViewPage: React.FC = () => {
             title_font_size: displayDashboard.title_font_size ?? 15,
             subtitle_font_size: displayDashboard.subtitle_font_size ?? 10,
             logo_size: displayDashboard.logo_size || 'medium',
-            filter_config: displayDashboard.filter_config || [],
+            enable_pages: displayDashboard.enable_pages || false,
+            filter_config: pages.find(p => p.id === activePageId)?.filter_config || [],
             logo_url: displayDashboard.logo_url || '',
             grid_gap: displayDashboard.grid_gap ?? 16,
             grid_cols: displayDashboard.grid_cols ?? 12,
@@ -1919,7 +2034,7 @@ const DashboardViewPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  saveMutation.mutate(layout);
+                  saveMutation.mutate(pages);
                   closeStyleEditor();
                 }}
                 disabled={saveMutation.isPending}

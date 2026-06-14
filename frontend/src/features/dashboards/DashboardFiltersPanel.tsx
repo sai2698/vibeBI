@@ -110,6 +110,12 @@ const DashboardFiltersPanel: React.FC<DashboardFiltersPanelProps> = ({ isOpen, o
     enabled: isOpen
   });
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setLocalFilters(filters);
+    }
+  }, [isOpen, filters]);
+
   if (!isOpen) return null;
 
   const handleAddFilter = () => {

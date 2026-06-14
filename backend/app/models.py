@@ -175,6 +175,8 @@ class Dashboard(Base):
     title_font_size = Column(Integer, default=15)
     subtitle_font_size = Column(Integer, default=10)
     logo_size = Column(String(20), default="medium")
+    enable_pages = Column(Boolean, default=False)
+    pages = Column(JSONB, default=[])
     filter_config = Column(JSONB, default=[])
     filter_presets = Column(JSONB, default=[])
     logo_url = Column(String(512))

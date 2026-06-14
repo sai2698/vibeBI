@@ -23,6 +23,7 @@ interface DashboardSettings {
   role_ids: number[];
   co_owner_ids?: string[];
   co_owner_role_ids?: number[];
+  enable_pages?: boolean;
   filter_config: any[];
   echarts_theme?: string;
   llm_config?: {
@@ -373,6 +374,19 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
                   onChange={(e) => handleChange('grid_gap', parseInt(e.target.value))}
                   className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand"
                 />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Enable Multi-Page Tabs</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={localSettings.enable_pages || false} onChange={e => handleChange('enable_pages', e.target.checked)} />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-brand"></div>
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium leading-relaxed italic mt-1.5">
+                  When enabled, shows a tab bar allowing you to manage multiple dashboard layouts independently.
+                </p>
               </div>
 
               <div>
