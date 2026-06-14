@@ -1002,6 +1002,53 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
         backgroundColor: visualConfig?.backgroundColor || themeMeta?.background || '#fff',
       };
 
+      // Handle GeoMap zooming to filtered data
+      if (chartType === 'geomap' && isMapLoaded) {
+        const mapName = opt.series?.[0]?.map;
+        const categories = data.categories || [];
+        if (mapName && categories.length > 0) {
+           const map = echarts.getMap(mapName);
+           if (map && map.geoJSON) {
+              const features = map.geoJSON.features;
+              let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+              let found = false;
+              
+              const extractCoords = (coords: any[]) => {
+                if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+                  const lng = coords[0];
+                  const lat = coords[1];
+                  if (lng < minX) minX = lng;
+                  if (lng > maxX) maxX = lng;
+                  if (lat < minY) minY = lat;
+                  if (lat > maxY) maxY = lat;
+                  found = true;
+                } else if (Array.isArray(coords)) {
+                  coords.forEach(extractCoords);
+                }
+              };
+              
+              features.forEach((f: any) => {
+                const name = f.properties?.name || f.properties?.st_nm || f.properties?.district;
+                if (categories.includes(name) || (f.properties && Object.values(f.properties).some(v => categories.includes(String(v))))) {
+                   if (f.geometry && f.geometry.coordinates) {
+                     extractCoords(f.geometry.coordinates);
+                   }
+                }
+              });
+              
+              if (found) {
+                const paddingX = (maxX - minX) * 0.05 || 0.1;
+                const paddingY = (maxY - minY) * 0.05 || 0.1;
+                opt.series[0].center = [(minX + maxX) / 2, (minY + maxY) / 2];
+                opt.series[0].boundingCoords = [
+                  [minX - paddingX, minY - paddingY],
+                  [maxX + paddingX, maxY + paddingY]
+                ];
+              }
+           }
+        }
+      }
+
       // Convert axis category data sentinels to display-friendly labels
       const convertAxisData = (axis: any) => {
         if (!axis) return;
@@ -1044,7 +1091,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
         backgroundColor: visualConfig?.backgroundColor || themeMeta?.background || '#fff',
       };
     }
-  }, [chartType, dataString, title, visualConfigString, theme, themeMeta]);
+  }, [chartType, dataString, title, visualConfigString, theme, themeMeta, isMapLoaded]);
 
   // Render React-based chart components (not ECharts)
   if (chartType === 'table') {
