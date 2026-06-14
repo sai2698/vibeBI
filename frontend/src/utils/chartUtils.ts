@@ -46,6 +46,73 @@ export const toSentinelValue = (v: any): any => {
   return v;
 };
 
+// --- Smart Sorting Utilities ---
+
+const MONTHS: Record<string, number> = {
+  january: 1, jan: 1,
+  february: 2, feb: 2,
+  march: 3, mar: 3,
+  april: 4, apr: 4,
+  may: 5,
+  june: 6, jun: 6,
+  july: 7, jul: 7,
+  august: 8, aug: 8,
+  september: 9, sep: 9,
+  october: 10, oct: 10,
+  november: 11, nov: 11,
+  december: 12, dec: 12
+};
+
+const WEEKDAYS: Record<string, number> = {
+  monday: 1, mon: 1,
+  tuesday: 2, tue: 2,
+  wednesday: 3, wed: 3,
+  thursday: 4, thu: 4,
+  friday: 5, fri: 5,
+  saturday: 6, sat: 6,
+  sunday: 7, sun: 7
+};
+
+/**
+ * Enterprise-grade robust sorting for chart categories.
+ * Intelligently recognizes weekdays, months, dates/timeseries, numbers, and falls back to natural string comparison.
+ */
+export const smartCompareCategories = (a: string, b: string): number => {
+  const aLower = String(a).toLowerCase().trim();
+  const bLower = String(b).toLowerCase().trim();
+
+  // 1. Weekdays
+  if (WEEKDAYS[aLower] && WEEKDAYS[bLower]) {
+    return WEEKDAYS[aLower] - WEEKDAYS[bLower];
+  }
+
+  // 2. Months
+  if (MONTHS[aLower] && MONTHS[bLower]) {
+    return MONTHS[aLower] - MONTHS[bLower];
+  }
+
+  // 3. Numbers (to avoid parsing basic numbers as dates)
+  const aIsNum = !isNaN(Number(aLower)) && aLower !== '';
+  const bIsNum = !isNaN(Number(bLower)) && bLower !== '';
+  if (aIsNum && bIsNum) {
+    return Number(aLower) - Number(bLower);
+  }
+
+  // 4. Dates / Timeseries
+  // Ensure it has some date-like characters to avoid parsing random words
+  const dateRegex = /[-/:]|\d{4}/;
+  if (!aIsNum && !bIsNum && dateRegex.test(aLower) && dateRegex.test(bLower)) {
+    const timeA = Date.parse(aLower);
+    const timeB = Date.parse(bLower);
+    if (!isNaN(timeA) && !isNaN(timeB)) {
+      return timeA - timeB;
+    }
+  }
+
+  // 5. Natural string comparison
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+};
+
 export const transformChartData = (
   resData: any[],
   chartType: string,

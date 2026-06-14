@@ -1,5 +1,6 @@
 import * as echarts from 'echarts';
 import { createChartConfigSchema, type ChartConfigSchema, getConfigValue } from './config-schema';
+import { smartCompareCategories } from '../../../utils/chartUtils';
 
 type EChartsOption = echarts.EChartsOption;
 
@@ -299,6 +300,28 @@ export const lineChartConfigSchema: ChartConfigSchema = createChartConfigSchema(
         },
       ],
     },
+    {
+      id: 'sorting',
+      title: 'Sorting',
+      icon: 'ArrowUpDown',
+      defaultExpanded: false,
+      fields: [
+        {
+          key: 'sorting.mode',
+          label: 'Sort By',
+          type: 'select',
+          options: [
+            { label: 'Default', value: 'none' },
+            { label: 'Value (Ascending)', value: 'value_asc' },
+            { label: 'Value (Descending)', value: 'value_desc' },
+            { label: 'Category (A-Z)', value: 'category_asc' },
+            { label: 'Category (Z-A)', value: 'category_desc' },
+          ],
+          defaultValue: 'none',
+          description: 'Sort data points by value or category',
+        },
+      ],
+    },
   ],
   defaultConfig: {
     x_axis: {
@@ -337,6 +360,9 @@ export const lineChartConfigSchema: ChartConfigSchema = createChartConfigSchema(
     animation: {
       duration: 1000,
     },
+    sorting: {
+      mode: 'none',
+    },
   },
 });
 
@@ -345,6 +371,36 @@ export function buildLineChartOptions({
   series,
   visualConfig,
 }: LineChartOptions): EChartsOption {
+  const sortMode = getConfigValue(visualConfig, 'sorting.mode') || 'none';
+
+  let displayCategories = categories ? [...categories] : [];
+  let displaySeries = series ? series.map(s => ({ ...s, data: s.data ? [...s.data] : [] })) : [];
+
+  if (sortMode !== 'none' && displayCategories.length > 0 && displaySeries.length > 0) {
+    let indices = Array.from({ length: displayCategories.length }, (_, i) => i);
+
+    indices.sort((a, b) => {
+      if (sortMode.startsWith('value')) {
+        let valA = Number(displaySeries[0]?.data?.[a]) || 0;
+        let valB = Number(displaySeries[0]?.data?.[b]) || 0;
+        if (valA === valB) return 0;
+        return sortMode === 'value_asc' ? valA - valB : valB - valA;
+      } else if (sortMode.startsWith('category')) {
+        let catA = String(displayCategories[a]);
+        let catB = String(displayCategories[b]);
+        const cmp = smartCompareCategories(catA, catB);
+        return sortMode === 'category_asc' ? cmp : -cmp;
+      }
+      return 0;
+    });
+
+    displayCategories = indices.map(i => categories![i]);
+    displaySeries = series.map(s => ({
+      ...s,
+      data: s.data ? indices.map(i => s.data![i]) : [],
+    }));
+  }
+
   const cfg = {
     xAxisTitle: getConfigValue(visualConfig, 'x_axis.title'),
     xAxisRotation: getConfigValue(visualConfig, 'x_axis.labelRotation') || 0,
@@ -407,7 +463,7 @@ export function buildLineChartOptions({
     },
     xAxis: {
       type: 'category',
-      data: categories,
+      data: displayCategories,
       boundaryGap: false,
       name: cfg.xAxisTitle || undefined,
       nameLocation: 'middle',
@@ -429,7 +485,7 @@ export function buildLineChartOptions({
         show: cfg.yAxisShowGridLines,
       },
     },
-    series: series.map((s) => ({
+    series: displaySeries.map((s) => ({
       name: s.name,
       type: 'line',
       data: s.data || [],
