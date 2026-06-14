@@ -67,10 +67,36 @@ class LineOfBusiness(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    roles = relationship("Role", secondary="lob_roles", backref="lobs")
+    groups = relationship("Group", secondary="lob_groups", backref="lobs")
+    users = relationship("User", secondary="lob_members", backref="lobs")
+
+    @property
+    def role_ids(self):
+        return [r.id for r in self.roles] if self.roles else []
+
+    @property
+    def group_ids(self):
+        return [g.id for g in self.groups] if self.groups else []
+
+    @property
+    def user_ids(self):
+        return [u.id for u in self.users] if self.users else []
+
 class LOBMember(Base):
     __tablename__ = "lob_members"
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     lob_id = Column(Integer, ForeignKey("lines_of_business.id", ondelete="CASCADE"), primary_key=True)
+
+class LOBRole(Base):
+    __tablename__ = "lob_roles"
+    lob_id = Column(Integer, ForeignKey("lines_of_business.id", ondelete="CASCADE"), primary_key=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)
+
+class LOBGroup(Base):
+    __tablename__ = "lob_groups"
+    lob_id = Column(Integer, ForeignKey("lines_of_business.id", ondelete="CASCADE"), primary_key=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True)
 
 class Theme(Base):
     __tablename__ = "themes"

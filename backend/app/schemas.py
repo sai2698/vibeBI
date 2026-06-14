@@ -129,7 +129,9 @@ class LineOfBusinessBase(BaseModel):
     is_active: Optional[bool] = True
 
 class LineOfBusinessCreate(LineOfBusinessBase):
-    pass
+    role_ids: List[int] = []
+    group_ids: List[int] = []
+    user_ids: List[UUID4] = []
 
 class LineOfBusinessUpdate(BaseModel):
     name: Optional[str] = None
@@ -137,10 +139,16 @@ class LineOfBusinessUpdate(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     is_active: Optional[bool] = None
+    role_ids: Optional[List[int]] = None
+    group_ids: Optional[List[int]] = None
+    user_ids: Optional[List[UUID4]] = None
 
 class LineOfBusinessResponse(LineOfBusinessBase):
     id: int
     created_at: datetime
+    role_ids: List[int] = []
+    group_ids: List[int] = []
+    user_ids: List[UUID4] = []
     class Config:
         from_attributes = True
 

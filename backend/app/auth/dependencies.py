@@ -64,7 +64,7 @@ async def get_current_admin_user(
     )
     
     result = await db.execute(query)
-    admin_user = result.first()
+    admin_user = result.scalars().first()
     
     if not admin_user:
         raise HTTPException(
