@@ -604,12 +604,14 @@ const DashboardViewPage: React.FC = () => {
 
   // Fetch Available Charts (always enabled now for type checking)
   const { data: availableCharts } = useQuery<Chart[]>({
-    queryKey: ['charts'],
+    queryKey: ['charts', dashboard?.id],
     queryFn: async () => {
-      const response = await api.get('/api/charts/');
+      const params: any = { limit: 1000 };
+      if (dashboard?.id) params.dashboard_id = dashboard.id;
+      const response = await api.get('/api/charts/', { params });
       return response.data;
     },
-    enabled: isEditing || isAIDrawerOpen, // Fetch if editing or if AI drawer needs context
+    enabled: !!dashboard, // Fetch if dashboard exists for type checking and AI context
   });
 
   const contextDatasetIds = useMemo(() => {

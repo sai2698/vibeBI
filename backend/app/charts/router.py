@@ -40,12 +40,29 @@ async def read_charts(
     lob_id: Optional[int] = None,
     chart_type: Optional[str] = None,
     exclude_chart_type: Optional[str] = None,
+    dashboard_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    from sqlalchemy import or_
     query = select(Chart).where(Chart.owner_id == current_user.id)
+
+    if dashboard_id:
+        from app.models import Dashboard
+        dash_res = await db.execute(select(Dashboard).where(Dashboard.id == dashboard_id))
+        dash = dash_res.scalar_one_or_none()
+        if dash and dash.layout:
+            chart_ids = [item.get("chart_id") for item in dash.layout if item.get("chart_id")]
+            if chart_ids:
+                query = select(Chart).where(
+                    or_(
+                        Chart.owner_id == current_user.id,
+                        Chart.id.in_(chart_ids)
+                    )
+                )
+
     if lob_id:
         query = query.where(Chart.lob_id == lob_id)
     if chart_type:
