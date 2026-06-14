@@ -26,6 +26,7 @@ import { buildDataTableChartOptions, dataTableChartConfigSchema } from './DataTa
 import { buildPivotTableChartOptions, pivotTableChartConfigSchema } from './PivotTableChart';
 import { buildMultiKPITileChartOptions, multiKpiTileChartConfigSchema } from './MultiKPITileChart';
 import { buildGeoMapChartOptions, geoMapChartConfigSchema } from './GeoMapChart';
+import { buildComboChartOptions, comboChartConfigSchema } from './ComboChart';
 
 export {
   buildBarChartOptions, barChartConfigSchema,
@@ -48,7 +49,8 @@ export {
   buildDataTableChartOptions, dataTableChartConfigSchema,
   buildPivotTableChartOptions, pivotTableChartConfigSchema,
   buildMultiKPITileChartOptions, multiKpiTileChartConfigSchema,
-  buildGeoMapChartOptions, geoMapChartConfigSchema
+  buildGeoMapChartOptions, geoMapChartConfigSchema,
+  buildComboChartOptions, comboChartConfigSchema
 };
 
 // Helper to get chart config schema by chart type
@@ -77,6 +79,8 @@ export function getChartConfigSchema(chartType: string): ChartConfigSchema | und
     pivot: pivotTableChartConfigSchema,
     multikpi: multiKpiTileChartConfigSchema,
     geomap: geoMapChartConfigSchema,
+    combo: comboChartConfigSchema,
   };
   return schemas[chartType];
 }
+

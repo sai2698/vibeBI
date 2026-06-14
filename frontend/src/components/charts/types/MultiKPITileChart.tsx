@@ -171,6 +171,28 @@ export const multiKpiTileChartConfigSchema: ChartConfigSchema = createChartConfi
           description: 'Group measures in pairs (Primary + Secondary)',
         },
         {
+          key: 'secondary.comparisonMode',
+          label: 'Trend Comparison',
+          type: 'select',
+          options: [
+            { label: 'Primary vs Secondary', value: 'primary_vs_secondary' },
+            { label: 'Secondary vs Threshold', value: 'secondary_vs_threshold' },
+          ],
+          defaultValue: 'primary_vs_secondary',
+          description: 'How to calculate the trend direction',
+        },
+        {
+          key: 'secondary.displayMode',
+          label: 'Display Value',
+          type: 'select',
+          options: [
+            { label: 'Absolute Value', value: 'absolute' },
+            { label: 'Delta (Primary - Secondary)', value: 'delta' },
+            { label: 'Percentage Change', value: 'percent_change' },
+          ],
+          defaultValue: 'absolute',
+        },
+        {
           key: 'secondary.position',
           label: 'Position',
           type: 'select',
@@ -293,7 +315,7 @@ export const multiKpiTileChartConfigSchema: ChartConfigSchema = createChartConfi
   ],
   defaultConfig: {
     kpi: { showValue: true, showLabel: true, valueFormat: 'standard', icon1: '', icon2: '', icon3: '', icon4: '', valueFontSize: 36, labelFontSize: 13, trendThreshold: 0 },
-    secondary: { enabled: false, position: 'bottom', valueFormat: 'percentage', fontSize: 16, trendIconType: 'triangle' },
+    secondary: { enabled: false, comparisonMode: 'primary_vs_secondary', displayMode: 'absolute', position: 'bottom', valueFormat: 'percentage', fontSize: 16, trendIconType: 'triangle' },
     color: { primaryValueColor: '#475569', positiveColor: '#22c55e', negativeColor: '#ef4444', backgroundColor: 'transparent' },
     layout: { orientation: 'horizontal', showDividers: true, gap: 0, padding: 24 },
   },
@@ -334,6 +356,8 @@ export const MultiKPITileChart: React.FC<MultiKPITileChartProps> = ({
   const padding = getConfigValue(cfg, 'layout.padding') ?? 24;
   
   const secondaryEnabled = getConfigValue(cfg, 'secondary.enabled') ?? false;
+  const secondaryComparisonMode = getConfigValue(cfg, 'secondary.comparisonMode') ?? 'primary_vs_secondary';
+  const secondaryDisplayMode = getConfigValue(cfg, 'secondary.displayMode') ?? 'absolute';
   const secondaryPosition = getConfigValue(cfg, 'secondary.position') ?? 'bottom';
   const secondaryFontSize = getConfigValue(cfg, 'secondary.fontSize') ?? 16;
   const secondaryFormat = getConfigValue(cfg, 'secondary.valueFormat') ?? 'percentage';
@@ -388,6 +412,23 @@ export const MultiKPITileChart: React.FC<MultiKPITileChartProps> = ({
     for (let i = 0; i < series.length; i += 2) {
       const primary = getMetricData(series[i], i, primaryFormat);
       const secondary = i + 1 < series.length ? getMetricData(series[i + 1], i + 1, secondaryFormat) : undefined;
+      
+      if (secondary) {
+        if (secondaryComparisonMode === 'primary_vs_secondary') {
+          const isPositive = primary.numericValue >= secondary.numericValue;
+          secondary.isPositive = isPositive;
+          secondary.color = isPositive ? positiveColor : negativeColor;
+        }
+
+        if (secondaryDisplayMode === 'delta') {
+          const delta = primary.numericValue - secondary.numericValue;
+          secondary.formattedValue = formatValue(Math.abs(delta), secondaryFormat);
+        } else if (secondaryDisplayMode === 'percent_change') {
+          const pct = secondary.numericValue !== 0 ? ((primary.numericValue - secondary.numericValue) / Math.abs(secondary.numericValue)) * 100 : 0;
+          secondary.formattedValue = formatValue(Math.abs(pct), secondaryFormat);
+        }
+      }
+
       tiles.push({ primary, secondary, icon: getIconForIndex(tileIdx++) });
     }
   } else {

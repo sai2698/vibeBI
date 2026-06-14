@@ -25,6 +25,7 @@ import {
   buildSunburstChartOptions,
   buildFunnelChartOptions,
   buildGaugeChartOptions,
+  buildComboChartOptions,
 } from './types';
 
 import { DataTableChart } from './types/DataTableChart';
@@ -65,6 +66,7 @@ export type ChartType =
   | 'pivot'
   | 'multikpi'
   | 'geomap'
+  | 'combo'
   | 'custom';
 
 interface ChartData {
@@ -109,7 +111,7 @@ const brandColors = [
 // These use the Zr-level contextmenu + convertFromPixel approach.
 // All other chart types use ECharts instance.on('contextmenu') exclusively.
 const CARTESIAN_CHART_TYPES = new Set([
-  'bar', 'line', 'area', 'scatter', 'heatmap', 'boxplot', 'pictorialBar',
+  'bar', 'line', 'area', 'scatter', 'heatmap', 'boxplot', 'pictorialBar', 'combo'
 ]);
 
 import { buildGeoMapChartOptions } from './types/GeoMapChart';
@@ -381,6 +383,26 @@ function buildOption(chartType: ChartType, dataInput: ChartData, _title?: string
         series: data.series as any,
         visualConfig: {
           ...visualConfig,
+          colorPalette: cfg.colorPalette,
+        } as any,
+      });
+
+    case 'combo':
+      return buildComboChartOptions({
+        categories: data.categories,
+        series: data.series as any,
+        visualConfig: {
+          ...visualConfig,
+          xAxisTitle: cfg.xAxisTitle,
+          xAxisRotation: cfg.xAxisRotation,
+          xAxisTruncate: cfg.xAxisTruncate,
+          yAxisTitle: cfg.yAxisTitle,
+          showLegend: cfg.showLegend,
+          legendOrientation: cfg.legendOrientation,
+          showLabels: cfg.showLabels,
+          labelPosition: cfg.labelPosition,
+          toolboxShow: cfg.toolboxShow,
+          animationDuration: cfg.animationDuration,
           colorPalette: cfg.colorPalette,
         } as any,
       });
