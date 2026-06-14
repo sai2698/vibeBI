@@ -18,6 +18,7 @@ export interface KPITileChartProps {
       showLabel?: boolean;
       showTrend?: boolean;
       showIndicator?: boolean;
+      showBorder?: boolean;
       valueFontSize?: number;
       labelFontSize?: number;
       valueFormat?: string;
@@ -83,6 +84,13 @@ export const kpiTileChartConfigSchema: ChartConfigSchema = createChartConfigSche
           type: 'boolean',
           defaultValue: true,
           description: 'Show color-coded background based on value',
+        },
+        {
+          key: 'kpi.showBorder',
+          label: 'Show Left Border',
+          type: 'boolean',
+          defaultValue: false,
+          description: 'Show a left border on the KPI tile',
         },
         {
           key: 'kpi.valueFontSize',
@@ -193,17 +201,15 @@ export const kpiTileChartConfigSchema: ChartConfigSchema = createChartConfigSche
     },
   ],
   defaultConfig: {
-    kpi: { showValue: true, showLabel: true, showTrend: true, showIndicator: true, valueFontSize: 32, labelFontSize: 14, valueFormat: '{c}', trendThreshold: 0 },
+    kpi: { showValue: true, showLabel: true, showTrend: true, showIndicator: true, showBorder: false, valueFontSize: 32, labelFontSize: 14, valueFormat: '{c}', trendThreshold: 0 },
     color: { positiveColor: '#22c55e', negativeColor: '#ef4444', neutralColor: '#94a3b8', backgroundColor: '#f1f5f9' },
     layout: { orientation: 'vertical', align: 'center', padding: 16 },
   },
 });
 
-export function buildKPITileChartOptions({
-  categories,
-  series,
-  visualConfig = {},
-}: KPITileChartProps): EChartsOption {
+export function buildKPITileChartOptions(
+  _props: KPITileChartProps
+): EChartsOption {
   // This function is kept for compatibility but KPI is rendered as React component
   return { series: [] };
 }
@@ -246,12 +252,14 @@ export const KPITileChart: React.FC<KPITileChartProps> = ({
     ? value.toLocaleString(undefined, { maximumFractionDigits: 1 })
     : String(value);
 
+  const showBorder = getConfigValue(cfg, 'kpi.showBorder') ?? false;
+
   return (
     <div
-      className="flex flex-col items-center justify-center w-full h-full p-2 text-center overflow-hidden transition-colors duration-300 border-l-4"
+      className={`flex flex-col items-center justify-center w-full h-full p-2 text-center overflow-hidden transition-colors duration-300 ${showBorder ? 'border-l-4' : ''}`}
       style={{
         backgroundColor: themeMeta?.background || (getConfigValue(cfg, 'color.backgroundColor') ?? '#f1f5f9'),
-        borderLeftColor: themeMeta?.primary || primaryColor,
+        borderLeftColor: showBorder ? (themeMeta?.primary || primaryColor) : undefined,
         cursor: onDrillContextMenu ? 'context-menu' : undefined,
       }}
       onContextMenu={onDrillContextMenu ? (e) => onDrillContextMenu(e, formattedValue, label) : undefined}
