@@ -26,8 +26,10 @@ interface Chart {
 interface SelectChartModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectChart: (chart: any) => void;
+  onSelectChart?: (chart: any) => void;
+  onSelectCharts?: (charts: any[]) => void;
   hideLayoutTab?: boolean;
+  multiSelect?: boolean;
 }
 
 const getChartIcon = (type: string) => {
@@ -42,19 +44,21 @@ const getChartIcon = (type: string) => {
   }
 };
 
-const SelectChartModal: React.FC<SelectChartModalProps> = ({ isOpen, onClose, onSelectChart, hideLayoutTab }) => {
+const SelectChartModal: React.FC<SelectChartModalProps> = ({ isOpen, onClose, onSelectChart, onSelectCharts, hideLayoutTab, multiSelect }) => {
   const { activeLOB } = useLOBStore();
   const [currentFolderId, setCurrentFolderId] = useState<number | null | 'all'>('all');
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'charts' | 'layout'>('charts');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedCharts, setSelectedCharts] = useState<any[]>([]);
 
   // Reset state when opened
   useEffect(() => {
     if (isOpen) {
       setCurrentFolderId('all');
       setSearchQuery('');
+      setSelectedCharts([]);
     }
   }, [isOpen]);
 
@@ -389,16 +393,35 @@ const SelectChartModal: React.FC<SelectChartModalProps> = ({ isOpen, onClose, on
                   ))}
 
                   {/* Render Charts */}
-                  {displayCharts.map(chart => (
-                    viewMode === 'grid' ? (
+                  {displayCharts.map(chart => {
+                    const isSelected = multiSelect && selectedCharts.some(c => c.id === chart.id);
+                    return viewMode === 'grid' ? (
                       <button
                         key={`chart-${chart.id}`}
-                        onClick={() => onSelectChart(chart)}
-                        className="group flex flex-col items-start p-5 rounded-xl bg-white dark:bg-[#161622] border-2 border-transparent hover:border-brand/30 hover:shadow-xl hover:shadow-brand/5 transition-all duration-300 text-left relative overflow-hidden h-full"
+                        onClick={() => {
+                          if (multiSelect) {
+                            if (isSelected) {
+                              setSelectedCharts(prev => prev.filter(c => c.id !== chart.id));
+                            } else {
+                              setSelectedCharts(prev => [...prev, chart]);
+                            }
+                          } else if (onSelectChart) {
+                            onSelectChart(chart);
+                          }
+                        }}
+                        className={`group flex flex-col items-start p-5 rounded-xl bg-white dark:bg-[#161622] border-2 transition-all duration-300 text-left relative overflow-hidden h-full ${
+                          isSelected 
+                            ? 'border-brand shadow-md bg-brand/5' 
+                            : 'border-transparent hover:border-brand/30 hover:shadow-xl hover:shadow-brand/5'
+                        }`}
                       >
-                        <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center shadow-md">
-                            <Plus size={16} strokeWidth={3} />
+                        <div className={`absolute top-0 right-0 p-3 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md ${isSelected ? 'bg-brand text-white' : 'bg-brand text-white'}`}>
+                            {isSelected ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            ) : (
+                              <Plus size={16} strokeWidth={3} />
+                            )}
                           </div>
                         </div>
 
@@ -416,8 +439,22 @@ const SelectChartModal: React.FC<SelectChartModalProps> = ({ isOpen, onClose, on
                     ) : (
                       <button
                         key={`chart-${chart.id}`}
-                        onClick={() => onSelectChart(chart)}
-                        className="group flex items-center gap-4 p-4 bg-white dark:bg-[#161622] rounded-xl cursor-pointer select-none transition-all border border-slate-150 hover:border-brand/30 dark:border-slate-800 dark:hover:border-brand/30 shadow-sm hover:shadow-md w-full text-left"
+                        onClick={() => {
+                          if (multiSelect) {
+                            if (isSelected) {
+                              setSelectedCharts(prev => prev.filter(c => c.id !== chart.id));
+                            } else {
+                              setSelectedCharts(prev => [...prev, chart]);
+                            }
+                          } else if (onSelectChart) {
+                            onSelectChart(chart);
+                          }
+                        }}
+                        className={`group flex items-center gap-4 p-4 bg-white dark:bg-[#161622] rounded-xl cursor-pointer select-none transition-all border shadow-sm w-full text-left ${
+                          isSelected 
+                            ? 'border-brand bg-brand/5 shadow-md' 
+                            : 'border-slate-150 hover:border-brand/30 dark:border-slate-800 dark:hover:border-brand/30 hover:shadow-md'
+                        }`}
                       >
                         <div className="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-brand/10 group-hover:text-brand transition-colors shrink-0">
                           {getChartIcon(chart.chart_type)}
@@ -426,12 +463,12 @@ const SelectChartModal: React.FC<SelectChartModalProps> = ({ isOpen, onClose, on
                           <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 mb-0.5 truncate">{chart.title || 'Untitled Chart'}</div>
                           <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em]">{chart.chart_type}</div>
                         </div>
-                        <div className="opacity-0 group-hover:opacity-100 w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center shadow-md transition-opacity shrink-0">
-                          <Plus size={16} strokeWidth={3} />
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-opacity shrink-0 ${isSelected ? 'opacity-100 bg-brand text-white' : 'opacity-0 group-hover:opacity-100 bg-brand text-white'}`}>
+                          {isSelected ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> : <Plus size={16} strokeWidth={3} />}
                         </div>
                       </button>
-                    )
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -449,39 +486,91 @@ const SelectChartModal: React.FC<SelectChartModalProps> = ({ isOpen, onClose, on
                     { type: 'text', title: 'Text/Markdown', icon: <AlignLeft size={20} />, desc: 'Rich text block' },
                     { type: 'divider', title: 'Divider', icon: <Minus size={20} />, desc: 'Horizontal line separator' },
                     { type: 'tabs', title: 'Tabs Container', icon: <Layers size={20} />, desc: 'Tabbed chart viewer' }
-                  ].map(item => (
-                    <button
-                      key={item.type}
-                      onClick={() => onSelectChart({ 
-                        id: -1, 
-                        title: item.title, 
-                        chart_type: item.type, 
-                        widget_type: item.type, 
-                        content: item.type === 'header' ? 'New Header' : item.type === 'tabs' ? JSON.stringify([{ id: 'tab1', label: 'Tab 1', chart_id: null }]) : '' 
-                      })}
-                      className="group flex flex-col items-start p-5 rounded-xl bg-white dark:bg-[#161622] border-2 border-transparent hover:border-brand/30 hover:shadow-xl hover:shadow-brand/5 transition-all duration-300 text-left relative overflow-hidden"
-                    >
-                      <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center shadow-md">
-                          <Plus size={16} strokeWidth={3} />
+                  ].map(item => {
+                    const isSelected = multiSelect && selectedCharts.some(c => c.id === -1 && c.title === item.title);
+                    
+                    return (
+                      <button
+                        key={item.type}
+                        onClick={() => {
+                          const chartObj = { 
+                            id: -1, 
+                            title: item.title, 
+                            chart_type: item.type, 
+                            widget_type: item.type, 
+                            content: item.type === 'header' ? 'New Header' : item.type === 'tabs' ? JSON.stringify([{ id: 'tab1', label: 'Tab 1', chart_id: null }]) : '' 
+                          };
+                          if (multiSelect) {
+                            setSelectedCharts(prev => [...prev, chartObj]); // allow pushing multiple layout elements
+                          } else if (onSelectChart) {
+                            onSelectChart(chartObj);
+                          }
+                        }}
+                        className={`group flex flex-col items-start p-5 rounded-xl bg-white dark:bg-[#161622] border-2 transition-all duration-300 text-left relative overflow-hidden ${
+                          isSelected 
+                            ? 'border-brand shadow-md bg-brand/5' 
+                            : 'border-transparent hover:border-brand/30 hover:shadow-xl hover:shadow-brand/5'
+                        }`}
+                      >
+                        <div className={`absolute top-0 right-0 p-3 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md ${isSelected ? 'bg-brand text-white' : 'bg-brand text-white'}`}>
+                            {isSelected ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            ) : (
+                              <Plus size={16} strokeWidth={3} />
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 dark:text-slate-500 mb-4 group-hover:bg-brand/10 group-hover:text-brand transition-colors">
-                        {item.icon}
-                      </div>
+                        <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 dark:text-slate-500 mb-4 group-hover:bg-brand/10 group-hover:text-brand transition-colors">
+                          {item.icon}
+                        </div>
 
-                      <div className="w-full">
-                        <div className="text-sm font-black text-slate-800 dark:text-slate-200 mb-1 truncate">{item.title}</div>
-                        <div className="text-[10px] font-medium text-slate-400 dark:text-slate-500">{item.desc}</div>
-                      </div>
-                    </button>
-                  ))}
+                        <div className="w-full">
+                          <div className="text-sm font-black text-slate-800 dark:text-slate-200 mb-1 truncate">{item.title}</div>
+                          <div className="text-[10px] font-medium text-slate-400 dark:text-slate-500">{item.desc}</div>
+                          
+                          {/* If multiple layout elements of this type are selected, show badge */}
+                          {multiSelect && selectedCharts.filter(c => c.id === -1 && c.title === item.title).length > 0 && (
+                            <div className="absolute top-3 left-3 w-6 h-6 bg-brand text-white text-xs font-bold rounded-full flex items-center justify-center">
+                              {selectedCharts.filter(c => c.id === -1 && c.title === item.title).length}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
         </div>
+
+        {/* Footer for Multi-Select */}
+        {multiSelect && (
+          <div className="shrink-0 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center rounded-b-2xl">
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+              {selectedCharts.length} chart{selectedCharts.length !== 1 && 's'} selected
+            </span>
+            <div className="flex gap-3">
+              <button 
+                onClick={onClose} 
+                className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                   if (onSelectCharts) onSelectCharts(selectedCharts);
+                }}
+                disabled={selectedCharts.length === 0}
+                className="px-5 py-2 text-sm font-semibold text-white bg-brand hover:bg-brand/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all flex items-center gap-2"
+              >
+                Add {selectedCharts.length > 0 ? selectedCharts.length : ''} {selectedCharts.length === 1 ? 'Item' : 'Items'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body

@@ -661,38 +661,48 @@ const DashboardViewPage: React.FC = () => {
     setIsStyleEditorOpen(false);
   };
 
-  const addChartToDashboard = (chart: any) => {
-    let w = 6;
-    let h = 4;
-    switch (chart.chart_type) {
-      case 'kpi': w = 2; h = 2; break;
-      case 'pie': w = 4; h = 3; break;
-      case 'header': w = 12; h = 1; break;
-      case 'divider': w = 12; h = 1; break;
-      case 'text': w = 6; h = 2; break;
-      case 'tabs': w = 12; h = 6; break;
-      case 'bar':
-      case 'line':
-      case 'table': w = 6; h = 4; break;
-      default: w = 6; h = 4; break;
-    }
+  const addChartsToDashboard = (charts: any[]) => {
+    let currentMaxY = layout.length > 0 ? Math.max(...layout.map(l => l.y + l.h)) : 0;
+    const newItems: DashboardLayoutItem[] = [];
 
-    const maxY = layout.length > 0 ? Math.max(...layout.map(l => l.y + l.h)) : 0;
+    charts.forEach((chart, index) => {
+      let w = 6;
+      let h = 4;
+      switch (chart.chart_type) {
+        case 'kpi': w = 2; h = 2; break;
+        case 'pie': w = 4; h = 3; break;
+        case 'header': w = 12; h = 1; break;
+        case 'divider': w = 12; h = 1; break;
+        case 'text': w = 6; h = 2; break;
+        case 'tabs': w = 12; h = 6; break;
+        case 'bar':
+        case 'line':
+        case 'table': w = 6; h = 4; break;
+        default: w = 6; h = 4; break;
+      }
 
-    const newItem: DashboardLayoutItem = {
-      i: `n${Date.now()}`,
-      x: 0,
-      y: maxY,
-      w,
-      h,
-      chart_id: chart.id,
-      title: chart.title,
-      widget_type: chart.widget_type || 'chart',
-      content: chart.content || ''
-    };
-    setLayout([...layout, newItem]);
+      const newItem: DashboardLayoutItem = {
+        i: `n${Date.now() + index}`,
+        x: (index * 6) % 12,
+        y: currentMaxY,
+        w,
+        h,
+        chart_id: chart.id,
+        title: chart.title,
+        widget_type: chart.widget_type || 'chart',
+        content: chart.content || ''
+      };
+      
+      if ((index * 6) % 12 === 0 && index > 0) {
+        currentMaxY += h;
+      }
+      
+      newItems.push(newItem);
+    });
+
+    setLayout(prev => [...prev, ...newItems]);
     setShowAddChart(false);
-    toast.success(chart.widget_type ? 'Layout element added' : 'Chart added to dashboard');
+    toast.success(`${charts.length} item${charts.length > 1 ? 's' : ''} added to dashboard`);
   };
 
   const getChartIcon = (type: string) => {
@@ -1687,7 +1697,8 @@ const DashboardViewPage: React.FC = () => {
       <SelectChartModal
         isOpen={showAddChart}
         onClose={() => setShowAddChart(false)}
-        onSelectChart={addChartToDashboard}
+        multiSelect={true}
+        onSelectCharts={addChartsToDashboard}
       />
 
       {/* Save View Modal */}
