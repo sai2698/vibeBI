@@ -108,6 +108,7 @@ interface Dashboard {
   llm_config?: any;
   co_owners?: any[];
   role_ids?: number[];
+  co_owner_role_ids?: number[];
   cache_config?: any;
 }
 
@@ -585,6 +586,15 @@ const DashboardViewPage: React.FC = () => {
     }
   });
 
+  const { data: availableRoles } = useQuery<any[]>({
+    queryKey: ['roles'],
+    queryFn: async () => {
+      const response = await api.get('/api/roles/');
+      return response.data;
+    },
+    enabled: !!user
+  });
+
   const displayDashboard = useMemo(() => {
     if (!dashboard) return null;
     return { ...dashboard, ...previewSettings } as Dashboard;
@@ -592,8 +602,30 @@ const DashboardViewPage: React.FC = () => {
 
   const isOwner = useMemo(() => {
     if (!user || !dashboard) return false;
-    return user.id === dashboard.owner_id;
-  }, [user, dashboard]);
+    
+    // Check original owner
+    if (user.id === dashboard.owner_id) return true;
+    
+    // Check if user is explicitly in co_owners array
+    if (dashboard.co_owners && Array.isArray(dashboard.co_owners)) {
+      if (dashboard.co_owners.some(co => co.id === user.id)) {
+        return true;
+      }
+    }
+    
+    // Check if user's roles match any of the co_owner_role_ids
+    if (dashboard.co_owner_role_ids && availableRoles && user.roles) {
+      const userRoleIds = user.roles
+        .map(roleName => availableRoles.find(r => r.name === roleName)?.id)
+        .filter(Boolean);
+        
+      if (dashboard.co_owner_role_ids.some(id => userRoleIds.includes(id))) {
+        return true;
+      }
+    }
+    
+    return false;
+  }, [user, dashboard, availableRoles]);
 
   const sortedMobileLayout = useMemo(() => {
     return [...layout].sort((a, b) => {
