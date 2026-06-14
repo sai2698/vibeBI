@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api';
-import { Plus, Edit2, Trash2, Users, X, Shield } from 'lucide-react';
+import { Plus, Edit2, Trash2, Users, X, Shield, ChevronDown, Search, Check } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 interface Role {
@@ -28,6 +28,8 @@ const GroupManagementPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [roleSearch, setRoleSearch] = useState('');
 
   const { data: groups, isLoading } = useQuery<Group[]>({
     queryKey: ['groups'],
@@ -203,7 +205,7 @@ const GroupManagementPage: React.FC = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200 border dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-visible animate-in zoom-in duration-200 border dark:border-slate-800">
             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900">
               <h3 className="font-bold text-slate-900 dark:text-slate-100">{editingGroup ? 'Edit Group' : 'Create New Group'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
@@ -211,7 +213,7 @@ const GroupManagementPage: React.FC = () => {
               </button>
             </div>
             
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Group Name</label>
                 <input
@@ -233,33 +235,70 @@ const GroupManagementPage: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 ml-1">Assign Roles</label>
-                <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                  {roles?.map(role => (
-                    <button
-                      key={role.id}
-                      type="button"
-                      onClick={() => toggleRole(role.id)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
-                        selectedRoleIds.includes(role.id)
-                          ? 'bg-brand/5 dark:bg-brand/10 border-brand text-brand ring-1 ring-brand/20'
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${selectedRoleIds.includes(role.id) ? 'bg-brand text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
-                          <Shield size={16} />
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-bold">{role.name}</div>
-                          <div className="text-[10px] font-bold uppercase tracking-wider opacity-60">{role.description}</div>
-                        </div>
-                      </div>
-                      {selectedRoleIds.includes(role.id) && <Plus size={14} className="rotate-45" />}
-                    </button>
-                  ))}
+              <div className="relative">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Assign Roles</label>
+                
+                {/* Multiselect Trigger */}
+                <div 
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-4 focus:ring-brand/10 transition-all text-sm font-medium dark:text-slate-100 flex items-center justify-between cursor-pointer"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                >
+                  <span className={selectedRoleIds.length === 0 ? "text-slate-400" : "text-slate-900 dark:text-white"}>
+                    {selectedRoleIds.length === 0 
+                      ? "Select roles..." 
+                      : `${selectedRoleIds.length} role${selectedRoleIds.length > 1 ? 's' : ''} selected`}
+                  </span>
+                  <ChevronDown size={16} className={`text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                 </div>
+
+                {/* Multiselect Dropdown Menu */}
+                {isDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          className="w-full pl-8 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:border-brand text-slate-900 dark:text-white"
+                          placeholder="Search roles..."
+                          value={roleSearch}
+                          onChange={(e) => setRoleSearch(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar p-1">
+                      {roles
+                        ?.filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()) || r.description.toLowerCase().includes(roleSearch.toLowerCase()))
+                        .map(role => (
+                        <div
+                          key={role.id}
+                          onClick={() => toggleRole(role.id)}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                            selectedRoleIds.includes(role.id) 
+                              ? 'bg-brand/10 text-brand dark:bg-brand/20' 
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <div className={`flex items-center justify-center w-5 h-5 rounded border ${
+                            selectedRoleIds.includes(role.id) 
+                              ? 'bg-brand border-brand text-white' 
+                              : 'border-slate-300 dark:border-slate-600'
+                          }`}>
+                            {selectedRoleIds.includes(role.id) && <Check size={12} />}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold">{role.name}</div>
+                            <div className="text-[10px] opacity-70">{role.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                      {roles?.filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()) || r.description.toLowerCase().includes(roleSearch.toLowerCase())).length === 0 && (
+                        <div className="p-4 text-center text-sm text-slate-500">No roles found</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-2">

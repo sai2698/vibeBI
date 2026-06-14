@@ -28,15 +28,46 @@ async def seed():
             await session.commit()
             await session.refresh(superuser)
 
-        # Sprint 10: Granular Permissions
+        # Enterprise-Grade Granular Permissions
         default_permissions = [
+            # Menus
             ("menu:dashboards", "Access to Dashboards"),
-            ("menu:sqllab", "Access to SQL Lab"),
             ("menu:chart_builder", "Access to Chart Builder"),
-            ("menu:data_management", "Access to Datasources and Datasets"),
-            ("admin:all", "Full system access"),
-            ("datasource:read", "Read access to datasources"),
-            ("datasource:write", "Write access to datasources"),
+            ("menu:sqllab", "Access to SQL Lab"),
+            ("menu:data_management", "Access to Data Management"),
+            ("menu:admin", "Access to Administration"),
+            ("menu:self_service", "Access to Self Service"),
+            ("menu:scheduler", "Access to Scheduler"),
+            ("menu:mailer", "Access to Mailer"),
+            # Dashboards
+            ("dashboard:read", "Read Dashboards"),
+            ("dashboard:write", "Create/Edit Dashboards"),
+            ("dashboard:delete", "Delete Dashboards"),
+            ("dashboard:share", "Share Dashboards"),
+            # Charts
+            ("chart:read", "Read Charts"),
+            ("chart:write", "Create/Edit Charts"),
+            ("chart:delete", "Delete Charts"),
+            # Datasources
+            ("datasource:read", "Read Datasources"),
+            ("datasource:write", "Create/Edit Datasources"),
+            ("datasource:delete", "Delete Datasources"),
+            # Datasets
+            ("dataset:read", "Read Datasets"),
+            ("dataset:write", "Create/Edit Datasets"),
+            ("dataset:delete", "Delete Datasets"),
+            # SQL Lab
+            ("sqllab:access", "Access SQL Lab Workspace"),
+            ("sqllab:execute", "Execute SQL Queries"),
+            ("sqllab:export", "Export SQL Results"),
+            ("sqllab:save", "Save SQL Queries"),
+            # Administration
+            ("admin:all", "Full System Access"),
+            ("admin:users", "Manage Users"),
+            ("admin:roles", "Manage Roles"),
+            ("admin:groups", "Manage Groups"),
+            ("admin:rls", "Manage Row Level Security"),
+            ("admin:settings", "Manage Platform Settings"),
         ]
         
         perm_map = {}
@@ -51,10 +82,22 @@ async def seed():
             perm_map[p_name] = perm.id
 
         # Create Roles
+        admin_perms = [p[0] for p in default_permissions] # Admin gets everything
+        alpha_perms = [
+            "menu:dashboards", "menu:sqllab", "menu:chart_builder", "menu:data_management",
+            "menu:self_service", "menu:scheduler", "menu:mailer",
+            "dashboard:read", "dashboard:write", "dashboard:delete", "dashboard:share",
+            "chart:read", "chart:write", "chart:delete",
+            "dataset:read", "dataset:write", "dataset:delete",
+            "datasource:read", "datasource:write",
+            "sqllab:access", "sqllab:execute", "sqllab:export", "sqllab:save"
+        ]
+        gamma_perms = ["menu:dashboards", "dashboard:read", "chart:read"]
+
         roles_to_create = [
-            ("Admin", "Full Administrator", ["admin:all", "menu:dashboards", "menu:sqllab", "menu:chart_builder", "menu:data_management"]),
-            ("Alpha", "Regular Power User", ["menu:dashboards", "menu:sqllab", "menu:chart_builder", "menu:data_management"]),
-            ("Gamma", "Read-only User", ["menu:dashboards"]),
+            ("Admin", "Full Administrator", admin_perms),
+            ("Alpha", "Regular Power User", alpha_perms),
+            ("Gamma", "Read-only User", gamma_perms),
         ]
         
         for r_name, r_desc, r_perms in roles_to_create:

@@ -612,8 +612,13 @@ const DashboardViewPage: React.FC = () => {
     return { ...dashboard, ...previewSettings } as Dashboard;
   }, [dashboard, previewSettings]);
 
-  const isOwner = useMemo(() => {
+  const canEdit = useMemo(() => {
     if (!user || !dashboard) return false;
+
+    if (user.permissions?.includes('admin:all') || user.permissions?.includes('dashboard:write')) {
+      return true;
+    }
+
     
     // Check original owner
     if (user.id === dashboard.owner_id) return true;
@@ -638,6 +643,13 @@ const DashboardViewPage: React.FC = () => {
     
     return false;
   }, [user, dashboard, availableRoles]);
+
+  const canDelete = useMemo(() => {
+    if (!user) return false;
+    if (user.permissions?.includes('admin:all') || user.permissions?.includes('dashboard:delete')) return true;
+    if (dashboard && user.id === dashboard.owner_id) return true; // Owner can always delete
+    return false;
+  }, [user, dashboard]);
 
   const sortedMobileLayout = useMemo(() => {
     return [...layout].sort((a, b) => {
@@ -1025,7 +1037,7 @@ const DashboardViewPage: React.FC = () => {
 
         {/* Right Side: Actions list or Editing panel */}
         <div className="flex items-center gap-2">
-          {isEditing && isOwner ? (
+          {isEditing && canEdit ? (
             <div className="flex items-center gap-2 animate-in fade-in duration-300">
               <button
                 onClick={() => setShowAddChart(true)}
@@ -1051,7 +1063,7 @@ const DashboardViewPage: React.FC = () => {
             <div className="flex items-center gap-1">
               
               {/* Primary Actions */}
-              {isOwner && (
+              {canEdit && (
                 <button
                   onClick={() => setIsEditing(true)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 mr-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-md text-xs font-bold transition-all shadow-sm ${isMobile ? 'hidden' : ''}`}
@@ -1235,7 +1247,7 @@ const DashboardViewPage: React.FC = () => {
                       {/* Mobile Only Items */}
                       {isMobile && (
                         <>
-                          {isOwner && (
+                          {canEdit && (
                             <button onClick={() => { setIsEditing(true); setIsMoreOpen(false); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"><Maximize2 size={13} className="text-slate-400" /> Edit Layout</button>
                           )}
                           <button onClick={() => { setIsFilterBarOpen(!isFilterBarOpen); setIsMoreOpen(false); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"><Filter size={13} className="text-slate-400" /> Toggle Filters</button>
@@ -1266,7 +1278,7 @@ const DashboardViewPage: React.FC = () => {
                         {isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
                       </button>
 
-                      {isOwner && (
+                      {canEdit && (
                         <>
                           <div className="border-t border-slate-50 my-1" />
                           <button
@@ -1289,6 +1301,11 @@ const DashboardViewPage: React.FC = () => {
                             <Settings size={13} className="text-slate-400" />
                             Dashboard Settings
                           </button>
+                        </>
+                      )}
+                      
+                      {canDelete && (
+                        <>
                           <div className="border-t border-slate-50 my-1" />
                           <button
                             onClick={() => {

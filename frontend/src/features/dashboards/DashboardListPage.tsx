@@ -8,6 +8,7 @@ import { Plus, LayoutDashboard, Star, Clock, Trash2, Edit2, X, Search, LayoutGri
 import { useForm } from 'react-hook-form';
 import { useLOBStore } from '../../store/useLOBStore';
 import DeleteConfirmationModal from '../../components/ui/DeleteConfirmationModal';
+import { PermissionGate } from '../../components/auth/PermissionGate';
 
 interface Dashboard {
   id: number;
@@ -197,18 +198,20 @@ const DashboardListPage: React.FC = () => {
               />
             </div>
 
-            <button
-              onClick={() => {
-                if (!activeLOB) {
-                  toast.error('Please select or create a Line of Business (LOB) first.');
-                  return;
-                }
-                openCreateModal();
-              }}
-              className="btn-primary flex justify-center items-center gap-2"
-            >
-              <Plus size={18} /> New Dashboard
-            </button>
+            <PermissionGate permission="dashboard:write">
+              <button
+                onClick={() => {
+                  if (!activeLOB) {
+                    toast.error('Please select or create a Line of Business (LOB) first.');
+                    return;
+                  }
+                  openCreateModal();
+                }}
+                className="btn-primary flex justify-center items-center gap-2"
+              >
+                <Plus size={18} /> New Dashboard
+              </button>
+            </PermissionGate>
           </div>
         </div>
 
@@ -438,8 +441,12 @@ const DashboardListPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1">
-                            <button onClick={(e) => openEditModal(e, dash)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-brand dark:hover:text-brand hover:bg-brand/5 dark:hover:bg-brand/10 rounded-lg transition-all"><Edit2 size={16} /></button>
-                            <button onClick={(e) => handleDelete(e, dash.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"><Trash2 size={16} /></button>
+                            <PermissionGate permission="dashboard:write">
+                              <button onClick={(e) => openEditModal(e, dash)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-brand dark:hover:text-brand hover:bg-brand/5 dark:hover:bg-brand/10 rounded-lg transition-all"><Edit2 size={16} /></button>
+                            </PermissionGate>
+                            <PermissionGate permission="dashboard:delete">
+                              <button onClick={(e) => handleDelete(e, dash.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"><Trash2 size={16} /></button>
+                            </PermissionGate>
                           </div>
                         </td>
                       </tr>
@@ -490,8 +497,12 @@ const DashboardListPage: React.FC = () => {
                           {dash.is_featured && <span className="bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border border-amber-100/50 dark:bg-amber-900/20 dark:border-amber-800/30 dark:text-amber-400">Featured</span>}
                         </div>
                         <div className="flex items-center gap-1">
-                          <button onClick={(e) => openEditModal(e, dash)} className="p-1.5 text-slate-400 hover:text-brand hover:bg-brand/5 rounded-md transition-all opacity-0 group-hover:opacity-100"><Edit2 size={14} /></button>
-                          <button onClick={(e) => handleDelete(e, dash.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100 dark:hover:bg-red-900/30"><Trash2 size={14} /></button>
+                          <PermissionGate permission="dashboard:write">
+                            <button onClick={(e) => openEditModal(e, dash)} className="p-1.5 text-slate-400 hover:text-brand hover:bg-brand/5 rounded-md transition-all opacity-0 group-hover:opacity-100"><Edit2 size={14} /></button>
+                          </PermissionGate>
+                          <PermissionGate permission="dashboard:delete">
+                            <button onClick={(e) => handleDelete(e, dash.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100 dark:hover:bg-red-900/30"><Trash2 size={14} /></button>
+                          </PermissionGate>
                         </div>
                       </div>
                     </div>

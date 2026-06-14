@@ -14,7 +14,7 @@ const Sidebar: React.FC = () => {
   const hasPermission = (perm: string) => isAdmin || userPermissions.includes(perm);
 
   const navItems = [
-    { name: 'Self Service', path: '/self-service', icon: <Compass size={18} />, permission: 'menu:dashboards' },
+    { name: 'Self Service', path: '/self-service', icon: <Compass size={18} />, permission: 'menu:self_service' },
     { name: 'Dashboards', path: '/dashboards', icon: <LayoutDashboard size={18} />, permission: 'menu:dashboards' },
     { name: 'Charts', path: '/charts', icon: <BarChart3 size={18} />, permission: 'menu:chart_builder' },
     { name: 'Chart Builder', path: '/charts/builder', icon: <Plus size={18} />, permission: 'menu:chart_builder' },
@@ -24,22 +24,24 @@ const Sidebar: React.FC = () => {
     { name: 'Datasources', path: '/data/datasources', icon: <Database size={18} />, permission: 'menu:data_management' },
     { name: 'Datasets', path: '/data/datasets', icon: <Database size={18} />, permission: 'menu:data_management' },
     { name: 'Semantic Layer', path: '/data/semantic', icon: <Layers size={18} />, permission: 'menu:data_management' },
-    { name: 'Scheduler', path: '/scheduler', icon: <Clock size={18} />, permission: 'menu:dashboards' },
-    { name: 'Mailer', path: '/mailer', icon: <Mail size={18} />, permission: 'menu:dashboards' },
+    { name: 'Scheduler', path: '/scheduler', icon: <Clock size={18} />, permission: 'menu:scheduler' },
+    { name: 'Mailer', path: '/mailer', icon: <Mail size={18} />, permission: 'menu:mailer' },
   ];
 
   const filteredNavItems = navItems.filter(item => hasPermission(item.permission));
 
   const adminItems = [
-    { name: 'Users', path: '/admin/users', icon: <Users size={18} /> },
-    { name: 'Groups', path: '/admin/groups', icon: <UserCog size={18} /> },
-    { name: 'Roles', path: '/admin/roles', icon: <Shield size={18} /> },
-    { name: 'Row Level Security', path: '/settings/rls', icon: <Shield size={18} /> },
-    { name: 'LOBs', path: '/admin/lob', icon: <Globe size={18} /> },
-    { name: 'Themes', path: '/admin/themes', icon: <Settings size={18} /> },
-    { name: 'LDAP', path: '/admin/ldap', icon: <Shield size={18} /> },
-    { name: 'Audit Logs', path: '/admin/audit', icon: <Shield size={18} /> },
+    { name: 'Users', path: '/admin/users', icon: <Users size={18} />, permission: 'admin:users' },
+    { name: 'Groups', path: '/admin/groups', icon: <UserCog size={18} />, permission: 'admin:groups' },
+    { name: 'Roles', path: '/admin/roles', icon: <Shield size={18} />, permission: 'admin:roles' },
+    { name: 'Row Level Security', path: '/settings/rls', icon: <Shield size={18} />, permission: 'admin:rls' },
+    { name: 'LOBs', path: '/admin/lob', icon: <Globe size={18} />, permission: 'admin:settings' },
+    { name: 'Themes', path: '/admin/themes', icon: <Settings size={18} />, permission: 'admin:settings' },
+    { name: 'LDAP', path: '/admin/ldap', icon: <Shield size={18} />, permission: 'admin:settings' },
+    { name: 'Audit Logs', path: '/admin/audit', icon: <Shield size={18} />, permission: 'admin:all' },
   ];
+
+  const filteredAdminItems = adminItems.filter(item => hasPermission(item.permission));
 
   const [hoveredTooltip, setHoveredTooltip] = React.useState<{ text: string; top: number } | null>(null);
 
@@ -112,10 +114,10 @@ const Sidebar: React.FC = () => {
         </nav>
 
         {/* Administration */}
-        {isAdmin && (
+        {filteredAdminItems.length > 0 && (
           <nav className="space-y-1">
             <p className={`px-3 mb-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>Administration</p>
-            {adminItems.map((item) => (
+            {filteredAdminItems.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.path}

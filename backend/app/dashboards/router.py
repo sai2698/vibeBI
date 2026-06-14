@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from app.database import get_db
 from app.models import Dashboard, User
 from app.schemas import DashboardCreate, DashboardResponse, DashboardUpdate
-from app.auth.dependencies import get_current_active_user, get_current_admin_user
+from app.auth.dependencies import get_current_active_user, get_current_admin_user, has_permission
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 
@@ -19,7 +19,7 @@ from sqlalchemy import or_, and_, exists
 async def create_dashboard(
     dash_in: DashboardCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(has_permission("dashboard:write"))
 ):
     db_dashboard = Dashboard(
         title=dash_in.title,
@@ -122,7 +122,7 @@ async def read_dashboards(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(has_permission("dashboard:read"))
 ):
     # Get user roles
     user_role_ids = [role.id for group in current_user.groups for role in group.roles]
@@ -202,7 +202,7 @@ async def read_dashboards(
 async def read_dashboard(
     dashboard_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(has_permission("dashboard:read"))
 ):
     result = await db.execute(
         select(Dashboard)
@@ -270,7 +270,7 @@ async def update_dashboard(
     dashboard_id: int,
     dash_in: DashboardUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(has_permission("dashboard:write"))
 ):
     result = await db.execute(
         select(Dashboard)
@@ -384,7 +384,7 @@ async def toggle_favorite(
 async def delete_dashboard(
     dashboard_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(has_permission("dashboard:delete"))
 ):
     result = await db.execute(
         select(Dashboard)
