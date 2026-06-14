@@ -16,7 +16,7 @@ import {
   Filter, Settings, FilterX,
   BarChart3, PieChart, LineChart, TrendingUp, Table as TableIcon, Trash2,
   Bookmark, Info, MoreHorizontal, Clock, ExternalLink,
-  ChevronDown, Undo2, Redo2, Check, Sparkles, Palette
+  ChevronDown, Undo2, Redo2, Check, Sparkles, Palette, RefreshCw
 } from 'lucide-react';
 import DeleteConfirmationModal from '../../components/ui/DeleteConfirmationModal';
 import DashboardAIChat from './DashboardAIChat';
@@ -604,7 +604,7 @@ const DashboardViewPage: React.FC = () => {
 
   // Fetch Available Charts (always enabled now for type checking)
   const { data: availableCharts } = useQuery<Chart[]>({
-    queryKey: ['charts', dashboard?.id],
+    queryKey: ['dashboard-available-charts', dashboard?.id],
     queryFn: async () => {
       const params: any = { limit: 1000 };
       if (dashboard?.id) params.dashboard_id = dashboard.id;
@@ -615,7 +615,7 @@ const DashboardViewPage: React.FC = () => {
   });
 
   const contextDatasetIds = useMemo(() => {
-    if (!layout || !availableCharts) return [];
+    if (!layout || !availableCharts || !Array.isArray(availableCharts)) return [];
     const ids = new Set<number>();
     layout.forEach((w) => {
       const chart = availableCharts.find((c) => c.id === w.chart_id);
@@ -626,6 +626,7 @@ const DashboardViewPage: React.FC = () => {
 
   // Helper to get chart type
   const getChartType = (chartId: number) => {
+    if (!Array.isArray(availableCharts)) return undefined;
     return availableCharts?.find(c => c.id === chartId)?.chart_type;
   };
 
@@ -1014,6 +1015,18 @@ const DashboardViewPage: React.FC = () => {
                       title="Redo Action (Go Forward)"
                     >
                       <Redo2 size={15} />
+                    </button>
+                    <div className="w-px h-3.5 bg-slate-200 mx-0.5" />
+                    <button
+                      onClick={() => {
+                        queryClient.invalidateQueries({ queryKey: ['charts'] });
+                        queryClient.invalidateQueries({ queryKey: ['dashboards', id] });
+                        toast.success('Dashboard refreshed');
+                      }}
+                      className="p-1 rounded transition-colors text-slate-600 hover:bg-slate-100"
+                      title="Refresh Dashboard"
+                    >
+                      <RefreshCw size={15} />
                     </button>
                   </div>
 
