@@ -329,9 +329,9 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
       onMouseLeave={() => { setIsHovered(false); setIsMenuOpen(false); }}
     >
       {/* Loading Overlay (Centered) */}
-      {(isLoading || isFetching) && (
+      {(isMetadataLoading || isLoading || isFetching) && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950 transition-all duration-300 pointer-events-none">
-          <LoadingAnimation small={isFetching && !isLoading} />
+          <LoadingAnimation small={isFetching && !isLoading && !isMetadataLoading} />
         </div>
       )}
 
@@ -379,7 +379,7 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
       )}
 
       {/* Chart Canvas */}
-      <div className={`h-full transition-opacity duration-300 ${(isLoading || (isFetching && !chartResponse)) ? 'opacity-0' : 'opacity-100'}`}>
+      <div className={`h-full transition-opacity duration-300 ${(isMetadataLoading || isLoading || (isFetching && !chartResponse)) ? 'opacity-0' : 'opacity-100'}`}>
         {chartResponse && (
           <EChartWrapper
             chartType={chart_type}
