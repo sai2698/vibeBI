@@ -1484,7 +1484,7 @@ const EChartWrapper: React.FC<EChartWrapperProps> = ({
             if (echartsRef.current) {
               if (!CARTESIAN_CHART_TYPES.has(chartTypeRef.current)) {
                  isPieMultiSelectModeRef.current = true;
-                 toast.success("Multi-Select Mode ON: Click multiple pie slices to select them, then right-click your selection to filter!");
+                 toast.success("Multi-Select Mode ON: Click multiple items to select them, then right-click your selection to filter!");
                  setDrillMenu(null);
                  return;
               }

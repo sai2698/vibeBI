@@ -211,6 +211,7 @@ export function buildGeoMapChartOptions({
         name: series[0]?.name || 'Metric',
         type: 'map',
         map: mapRegion,
+        selectedMode: 'multiple',
         nameProperty: nameProperty,
         roam: roam,
         label: {
