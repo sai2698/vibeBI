@@ -126,7 +126,7 @@ const DashboardAIChat: React.FC<DashboardAIChatProps> = ({
         onClick={onClose}
       />
       
-      <div className="fixed inset-y-0 right-0 w-full md:w-[450px] lg:w-[500px] bg-slate-50 dark:bg-[#0a0a0f] shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-in-out border-l border-slate-200 dark:border-slate-800/60">
+      <div className="fixed inset-y-0 right-0 w-full md:w-[750px] bg-slate-50 dark:bg-[#0a0a0f] shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-in-out border-l border-slate-200 dark:border-slate-800/60">
         
         {/* Header */}
         <div className="shrink-0 h-20 border-b border-slate-200 dark:border-slate-800/60 px-6 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl relative z-10 shadow-sm">
