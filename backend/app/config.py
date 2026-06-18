@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     MAX_QUERY_ROWS: int = 100000
     QUERY_TIMEOUT_SEC: int = 30
     CACHE_TTL_SEC: int = 3600
+    FRONTEND_URL: str = "http://localhost:5173"
 
     class Config:
         env_file = ".env"

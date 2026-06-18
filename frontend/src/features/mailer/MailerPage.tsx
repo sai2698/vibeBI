@@ -9,7 +9,10 @@ const MailerPage: React.FC = () => {
     const [recipients, setRecipients] = useState('');
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
-    const [targetDashboardId, setTargetDashboardId] = useState<number | null>(null);
+    const [targetType, setTargetType] = useState<'dashboard' | 'chart' | 'none'>('dashboard');
+    const [targetId, setTargetId] = useState<number | null>(null);
+    const [includeSnapshot, setIncludeSnapshot] = useState(true);
+    const [attachDataFormat, setAttachDataFormat] = useState<'none' | 'csv' | 'xlsx'>('none');
     const [isSending, setIsSending] = useState(false);
     const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
@@ -17,6 +20,14 @@ const MailerPage: React.FC = () => {
         queryKey: ['dashboards'],
         queryFn: async () => {
             const res = await api.get('/api/dashboards/');
+            return res.data;
+        },
+    });
+
+    const { data: charts } = useQuery<any[]>({
+        queryKey: ['charts'],
+        queryFn: async () => {
+            const res = await api.get('/api/charts/');
             return res.data;
         },
     });
@@ -29,8 +40,10 @@ const MailerPage: React.FC = () => {
                     to: recipients.split(',').map(e => e.trim()),
                     subject,
                     body,
-                    dashboard_id: targetDashboardId,
-                    include_snapshot: true
+                    target_type: targetType,
+                    target_id: targetType !== 'none' ? targetId : null,
+                    include_snapshot: includeSnapshot,
+                    attach_data_format: attachDataFormat !== 'none' ? attachDataFormat : null
                 });
                 return response.data;
             } finally {
@@ -42,6 +55,8 @@ const MailerPage: React.FC = () => {
             setRecipients('');
             setSubject('');
             setBody('');
+            setTargetId(null);
+            setAttachDataFormat('none');
         },
         onError: (err: any) => {
             toast.error(err.response?.data?.detail || 'Failed to send email');
@@ -73,7 +88,7 @@ const MailerPage: React.FC = () => {
                         </div>
                         <div className="p-8 space-y-6">
                             <div className="grid grid-cols-2 gap-6">
-                                <div>
+                                <div className="col-span-2">
                                     <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 block">Recipients</label>
                                     <div className="relative">
                                         <Mail size={16} className="absolute left-3 top-3.5 text-slate-400 dark:text-slate-500" />
@@ -86,17 +101,43 @@ const MailerPage: React.FC = () => {
                                         />
                                     </div>
                                 </div>
+                                
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 block">Target Dashboard</label>
+                                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 block">Target Type</label>
                                     <div className="relative">
                                         <Layout size={16} className="absolute left-3 top-3.5 text-slate-400 dark:text-slate-500" />
                                         <select 
-                                            value={targetDashboardId || ''}
-                                            onChange={(e) => setTargetDashboardId(Number(e.target.value))}
+                                            value={targetType}
+                                            onChange={(e) => {
+                                                setTargetType(e.target.value as any);
+                                                setTargetId(null);
+                                            }}
                                             className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-slate-100 focus:ring-4 focus:ring-brand/10 transition-all outline-none appearance-none"
                                         >
-                                            <option value="">None (Custom Email Only)</option>
-                                            {dashboards?.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+                                            <option value="dashboard">Dashboard</option>
+                                            <option value="chart">Chart</option>
+                                            <option value="none">None (Custom Email Only)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 block">Select Asset</label>
+                                    <div className="relative">
+                                        <Paperclip size={16} className="absolute left-3 top-3.5 text-slate-400 dark:text-slate-500" />
+                                        <select 
+                                            value={targetId || ''}
+                                            onChange={(e) => setTargetId(Number(e.target.value))}
+                                            disabled={targetType === 'none'}
+                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-slate-100 focus:ring-4 focus:ring-brand/10 transition-all outline-none appearance-none disabled:opacity-50"
+                                        >
+                                            <option value="">Choose asset...</option>
+                                            {targetType === 'dashboard' && dashboards?.map(d => (
+                                                <option key={d.id} value={d.id}>{d.title}</option>
+                                            ))}
+                                            {targetType === 'chart' && charts?.map(c => (
+                                                <option key={c.id} value={c.id}>{c.title}</option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>
@@ -138,7 +179,7 @@ const MailerPage: React.FC = () => {
                                 </div>
                                 <button 
                                     onClick={() => sendMutation.mutate()}
-                                    disabled={isSending || !recipients}
+                                    disabled={isSending || !recipients || (targetType !== 'none' && !targetId)}
                                     className="flex items-center gap-2 px-8 py-3 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all disabled:opacity-50"
                                 >
                                     {isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
@@ -155,19 +196,33 @@ const MailerPage: React.FC = () => {
                         <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">Delivery Options</h3>
                         <div className="space-y-4">
                             <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-brand/5 dark:hover:bg-brand/10 transition-colors group">
-                                <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-brand focus:ring-brand dark:bg-slate-950 dark:border-slate-700" />
+                                <input 
+                                    type="checkbox" 
+                                    checked={includeSnapshot}
+                                    onChange={(e) => setIncludeSnapshot(e.target.checked)}
+                                    disabled={targetType === 'none'}
+                                    className="w-4 h-4 rounded text-brand focus:ring-brand dark:bg-slate-950 dark:border-slate-700 disabled:opacity-50" 
+                                />
                                 <div className="flex flex-col">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-brand transition-colors">Include PDF Snapshot</span>
                                     <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">High-fidelity layout capture</span>
                                 </div>
                             </label>
-                            <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-brand/5 dark:hover:bg-brand/10 transition-colors group">
-                                <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-brand focus:ring-brand dark:bg-slate-950 dark:border-slate-700" />
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-brand transition-colors">Interactive Link</span>
-                                    <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">Direct access to live dashboard</span>
-                                </div>
-                            </label>
+
+                            <div className="flex flex-col gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800">
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Attach Tabular Data</span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 italic mb-1">Export raw query data as file</span>
+                                <select 
+                                    value={attachDataFormat}
+                                    onChange={(e) => setAttachDataFormat(e.target.value as any)}
+                                    disabled={targetType === 'none'}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-100 outline-none disabled:opacity-50"
+                                >
+                                    <option value="none">No Attachment</option>
+                                    <option value="csv">CSV File (.csv)</option>
+                                    <option value="xlsx">Excel Workbook (.xlsx)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -175,7 +230,7 @@ const MailerPage: React.FC = () => {
                         <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-brand mx-auto mb-4 shadow-sm border border-brand/5 dark:border-brand/10">
                             <Clock size={24} />
                         </div>
-                        <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Automate this Report?</h3>
+                        <h3 className="text-sm font-bold text-slate-800 dark:text-brand-light">Automate this Report?</h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-6">Schedule this campaign to run daily, weekly, or monthly.</p>
                         <button 
                             onClick={() => setIsScheduleModalOpen(true)}
@@ -193,7 +248,7 @@ const MailerPage: React.FC = () => {
                 onSuccess={() => toast.success('Recurring report scheduled!')}
                 initialData={{
                     name: subject || 'Automated Dashboard Report',
-                    targetId: targetDashboardId || undefined,
+                    targetId: targetId || undefined,
                     recipients: recipients
                 }}
             />
