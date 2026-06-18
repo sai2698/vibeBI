@@ -21,6 +21,7 @@ const CreateBotModal: React.FC<{ onClose: () => void, editingBot: AIBot | null }
         base_url: editingBot?.llm_config.base_url || '',
         model_name: editingBot?.llm_config.model_name || '',
         api_key: editingBot?.llm_config.api_key || '',
+        api_type: editingBot?.llm_config.api_type || 'chat_completions',
         headers: editingBot?.llm_config.headers ? JSON.stringify(editingBot.llm_config.headers, null, 2) : '',
         system_prompt: editingBot?.llm_config.system_prompt || '',
         stream: editingBot?.llm_config.stream || false,
@@ -52,6 +53,7 @@ const CreateBotModal: React.FC<{ onClose: () => void, editingBot: AIBot | null }
                     base_url: data.base_url,
                     model_name: data.model_name,
                     api_key: data.api_key,
+                    api_type: data.api_type,
                     system_prompt: data.system_prompt,
                     stream: data.stream,
                     headers: data.headers ? JSON.parse(data.headers) : {}
@@ -189,6 +191,16 @@ const CreateBotModal: React.FC<{ onClose: () => void, editingBot: AIBot | null }
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">API Protocol Type</label>
+                                    <select
+                                        value={formData.api_type} onChange={e => setFormData({ ...formData, api_type: e.target.value as 'chat_completions' | 'messages' })}
+                                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all text-slate-900 dark:text-slate-100"
+                                    >
+                                        <option value="chat_completions">OpenAI Chat Completions</option>
+                                        <option value="messages">Anthropic Messages</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Model Name</label>
                                     <input
                                         type="text" value={formData.model_name} onChange={e => setFormData({ ...formData, model_name: e.target.value })}
@@ -196,16 +208,16 @@ const CreateBotModal: React.FC<{ onClose: () => void, editingBot: AIBot | null }
                                         placeholder="gpt-4o"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">API Key</label>
-                                    <div className="relative">
-                                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                        <input
-                                            type="password" value={formData.api_key} onChange={e => setFormData({ ...formData, api_key: e.target.value })}
-                                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all text-slate-900 dark:text-slate-100"
-                                            placeholder="sk-..."
-                                        />
-                                    </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">API Key</label>
+                                <div className="relative">
+                                    <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                    <input
+                                        type="password" value={formData.api_key} onChange={e => setFormData({ ...formData, api_key: e.target.value })}
+                                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all text-slate-900 dark:text-slate-100"
+                                        placeholder="sk-..."
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-2">

@@ -198,6 +198,7 @@ async def stream_chat_message(
         api_key = llm_config.get("api_key") or bot_llm_config.get("api_key")
         model_name = llm_config.get("model_name") or bot_llm_config.get("model_name", "gpt-4o")
         system_prompt = llm_config.get("system_prompt") or bot_llm_config.get("system_prompt", "You are a helpful assistant.")
+        api_type = llm_config.get("api_type") or bot_llm_config.get("api_type", "chat_completions")
         custom_headers = llm_config.get("headers", {})
         if isinstance(custom_headers, str):
             try:
@@ -220,6 +221,7 @@ async def stream_chat_message(
                 import httpx
                 from app.ai.tools import get_tool_instance
                 from app.ai.tools.sql import get_dataset_schemas_summary
+                from app.ai.utils import prepare_url, prepare_headers, prepare_tools, prepare_messages, parse_anthropic_stream_line
                 
                 # Setup tools
                 enable_sql_tool = (bot.tools_config or {}).get("enable_sql_tool", False)
@@ -261,11 +263,8 @@ async def stream_chat_message(
                     if not any(m.content == request.content for m in history):
                         messages.append({"role": "user", "content": request.content})
                 
-                req_headers = {"Content-Type": "application/json", **custom_headers}
-                if api_key:
-                    req_headers["Authorization"] = f"Bearer {api_key}"
-                
-                url = base_url.rstrip("/") + "/chat/completions" if "/chat/completions" not in base_url else base_url
+                req_headers = prepare_headers(api_key, api_type, custom_headers)
+                url = prepare_url(base_url, api_type)
                 
                 max_turns = 20
                 turn = 0
@@ -273,62 +272,77 @@ async def stream_chat_message(
                 async with httpx.AsyncClient() as client:
                     while turn < max_turns:
                         turn += 1
+                        payload_messages, payload_system = prepare_messages(messages, api_type, system_prompt)
                         payload = {
                             "model": model_name,
-                            "messages": messages,
+                            "messages": payload_messages,
                             "temperature": 0.7,
                             "stream": True
                         }
+                        if payload_system is not None:
+                            payload["system"] = payload_system
+                        if api_type == "messages":
+                            payload["max_tokens"] = 4096
                         if tools_payload:
-                            payload["tools"] = tools_payload
-
+                            payload["tools"] = prepare_tools(tools_payload, api_type)
+ 
                         # Variables for current turn streaming
                         current_tool_calls_dict = {}
-
+ 
                         async with client.stream("POST", url, json=payload, headers=req_headers, timeout=httpx.Timeout(30.0, read=120.0)) as response:
                             if response.status_code == 200:
-                                raw_buffer = b""
-                                async for raw_chunk in response.aiter_raw():
-                                    # Zero-buffer: forward raw bytes instantly
-                                    yield raw_chunk.decode("utf-8", errors="ignore")
-                                    raw_buffer += raw_chunk
-                                
-                                # Parse accumulated buffer AFTER stream ends (no inline jitter)
-                                full_text = raw_buffer.decode("utf-8", errors="ignore")
-                                for line in full_text.split("\n"):
-                                    line = line.strip()
-                                    if not line or not line.startswith("data:"):
-                                        continue
-                                    data_str = line[5:].strip()
-                                    if data_str == "[DONE]":
-                                        continue
-                                    try:
-                                        chunk_json = json.loads(data_str)
-                                        choice = chunk_json.get("choices", [{}])[0]
-                                        delta = choice.get("delta", {})
-                                        
-                                        reasoning = delta.get("reasoning") or delta.get("reasoning_content") or delta.get("thinking") or ""
-                                        if reasoning:
-                                            reasoning_content += reasoning
+                                if api_type == "messages":
+                                    async for line in response.aiter_lines():
+                                        openai_chunk, txt_delta, think_delta = parse_anthropic_stream_line(line, current_tool_calls_dict)
+                                        if openai_chunk:
+                                            yield f"data: {json.dumps(openai_chunk)}\n\n"
+                                        if txt_delta:
+                                            ai_content += txt_delta
+                                        if think_delta:
+                                            reasoning_content += think_delta
+                                else:
+                                    raw_buffer = b""
+                                    async for raw_chunk in response.aiter_raw():
+                                        # Zero-buffer: forward raw bytes instantly
+                                        yield raw_chunk.decode("utf-8", errors="ignore")
+                                        raw_buffer += raw_chunk
+                                    
+                                    # Parse accumulated buffer AFTER stream ends (no inline jitter)
+                                    full_text = raw_buffer.decode("utf-8", errors="ignore")
+                                    for line in full_text.split("\n"):
+                                        line = line.strip()
+                                        if not line or not line.startswith("data:"):
+                                            continue
+                                        data_str = line[5:].strip()
+                                        if data_str == "[DONE]":
+                                            continue
+                                        try:
+                                            chunk_json = json.loads(data_str)
+                                            choice = chunk_json.get("choices", [{}])[0]
+                                            delta = choice.get("delta", {})
                                             
-                                        content = delta.get("content") or ""
-                                        if content:
-                                            ai_content += content
-                                            
-                                        tcs = delta.get("tool_calls", [])
-                                        for tc in tcs:
-                                            idx = tc.get("index")
-                                            if idx not in current_tool_calls_dict:
-                                                current_tool_calls_dict[idx] = {"id": tc.get("id"), "function": {"name": tc.get("function", {}).get("name", ""), "arguments": tc.get("function", {}).get("arguments", "")}}
-                                            else:
-                                                if tc.get("id"):
-                                                    current_tool_calls_dict[idx]["id"] = tc["id"]
-                                                if tc.get("function", {}).get("name"):
-                                                    current_tool_calls_dict[idx]["function"]["name"] = tc["function"]["name"]
-                                                if tc.get("function", {}).get("arguments"):
-                                                    current_tool_calls_dict[idx]["function"]["arguments"] += tc["function"]["arguments"]
-                                    except Exception:
-                                        pass
+                                            reasoning = delta.get("reasoning") or delta.get("reasoning_content") or delta.get("thinking") or ""
+                                            if reasoning:
+                                                reasoning_content += reasoning
+                                                
+                                            content = delta.get("content") or ""
+                                            if content:
+                                                ai_content += content
+                                                
+                                            tcs = delta.get("tool_calls", [])
+                                            for tc in tcs:
+                                                idx = tc.get("index")
+                                                if idx not in current_tool_calls_dict:
+                                                    current_tool_calls_dict[idx] = {"id": tc.get("id"), "function": {"name": tc.get("function", {}).get("name", ""), "arguments": tc.get("function", {}).get("arguments", "")}}
+                                                else:
+                                                    if tc.get("id"):
+                                                        current_tool_calls_dict[idx]["id"] = tc["id"]
+                                                    if tc.get("function", {}).get("name"):
+                                                        current_tool_calls_dict[idx]["function"]["name"] = tc["function"]["name"]
+                                                    if tc.get("function", {}).get("arguments"):
+                                                        current_tool_calls_dict[idx]["function"]["arguments"] += tc["function"]["arguments"]
+                                        except Exception:
+                                            pass
                             else:
                                 error_body = (await response.aread()).decode("utf-8", errors="ignore")[:200]
                                 error_text = f"LLM Error {response.status_code}: {error_body}"
@@ -467,6 +481,7 @@ async def add_chat_message(
     api_key = llm_config.get("api_key")
     model_name = llm_config.get("model_name", "gpt-4o")
     system_prompt = llm_config.get("system_prompt", "You are a helpful assistant.")
+    api_type = llm_config.get("api_type") or llm_config.get("api_type", "chat_completions")
     custom_headers = llm_config.get("headers", {})
 
     ai_content = ""
@@ -491,33 +506,39 @@ async def add_chat_message(
             if not any(m.id == user_msg.id for m in history):
                 messages.append({"role": "user", "content": request.content})
 
+            from app.ai.utils import prepare_url, prepare_headers, prepare_messages
+
+            headers = prepare_headers(api_key, api_type, custom_headers)
+            url = prepare_url(base_url, api_type)
+            payload_messages, payload_system = prepare_messages(messages, api_type, system_prompt)
+            payload = {
+                "model": model_name,
+                "messages": payload_messages,
+                "temperature": 0.7,
+                "stream": False
+            }
+            if payload_system is not None:
+                payload["system"] = payload_system
+            if api_type == "messages":
+                payload["max_tokens"] = 4096
+
             async with httpx.AsyncClient() as client:
-                headers = {
-                    "Content-Type": "application/json",
-                    **custom_headers
-                }
-                if api_key:
-                    headers["Authorization"] = f"Bearer {api_key}"
-                
-                # Normalize endpoint URL (OpenAI style)
-                url = base_url.rstrip("/") + "/chat/completions" if "/chat/completions" not in base_url else base_url
-                
                 response = await client.post(
                     url,
-                    json={
-                        "model": model_name,
-                        "messages": messages,
-                        "temperature": 0.7,
-                        "stream": False # Always non-streaming for this endpoint
-                    },
+                    json=payload,
                     headers=headers,
                     timeout=30.0
                 )
                 
                 if response.status_code == 200:
                     data = response.json()
-                    # Basic non-streaming handling for now
-                    ai_content = data["choices"][0]["message"]["content"]
+                    if api_type == "messages":
+                        ai_content = ""
+                        for block in data.get("content", []):
+                            if block.get("type") == "text":
+                                ai_content += block.get("text", "")
+                    else:
+                        ai_content = data["choices"][0]["message"]["content"]
                 else:
                     ai_content = f"Error from LLM Provider ({response.status_code}): {response.text[:200]}"
         except Exception as e:
@@ -589,23 +610,29 @@ async def generate_chat_title(
     base_url = llm_config.get("base_url")
     api_key = llm_config.get("api_key")
     model_name = llm_config.get("model_name", "gpt-4o")
+    api_type = llm_config.get("api_type") or llm_config.get("api_type", "chat_completions")
     custom_headers = llm_config.get("headers", {})
 
-    url = base_url.rstrip("/") + "/chat/completions" if "/chat/completions" not in base_url else base_url
-    req_headers = {"Content-Type": "application/json", **custom_headers}
-    if api_key:
-        req_headers["Authorization"] = f"Bearer {api_key}"
-
+    from app.ai.utils import prepare_url, prepare_headers, prepare_messages
+    
+    req_headers = prepare_headers(api_key, api_type, custom_headers)
+    url = prepare_url(base_url, api_type)
+    
+    openai_messages = [
+        {"role": "system", "content": "You are a title generator. Generate a short, concise title (max 3-4 words) for this conversation based on the user's first message. Respond with JUST the string title, nothing else, no quotes."},
+        {"role": "user", "content": request.message}
+    ]
+    payload_messages, payload_system = prepare_messages(openai_messages, api_type, openai_messages[0]["content"])
+    
     payload = {
         "model": model_name,
-        "messages": [
-            {"role": "system", "content": "You are a title generator. Generate a short, concise title (max 3-4 words) for this conversation based on the user's first message. Respond with JUST the string title, nothing else, no quotes."},
-            {"role": "user", "content": request.message}
-        ],
+        "messages": payload_messages,
         "temperature": 0.5,
         "stream": False,
         "max_tokens": 15
     }
+    if payload_system is not None:
+        payload["system"] = payload_system
 
     try:
         import httpx
@@ -613,7 +640,14 @@ async def generate_chat_title(
             response = await client.post(url, json=payload, headers=req_headers, timeout=30.0)
             if response.status_code == 200:
                 data = response.json()
-                title = data.get("choices", [{}])[0].get("message", {}).get("content", "New Chat").strip(' "\'')
+                if api_type == "messages":
+                    title = ""
+                    for block in data.get("content", []):
+                        if block.get("type") == "text":
+                            title += block.get("text", "")
+                    title = title.strip(' "\'')
+                else:
+                    title = data.get("choices", [{}])[0].get("message", {}).get("content", "New Chat").strip(' "\'')
                 if title:
                     session.title = title
                     await db.commit()

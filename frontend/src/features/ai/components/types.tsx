@@ -15,6 +15,7 @@ export interface AIBot {
         base_url?: string;
         model_name?: string;
         api_key?: string;
+        api_type?: 'chat_completions' | 'messages';
         headers?: Record<string, string>;
         system_prompt?: string;
         stream?: boolean;

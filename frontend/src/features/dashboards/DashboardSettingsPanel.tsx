@@ -29,6 +29,7 @@ interface DashboardSettings {
   llm_config?: {
     base_url?: string;
     api_key?: string;
+    api_type?: 'chat_completions' | 'messages';
     model_name?: string;
     system_prompt?: string;
     headers?: Record<string, string>;
@@ -502,6 +503,15 @@ const DashboardSettingsPanel: React.FC<DashboardSettingsPanelProps> = ({ isOpen,
                 <input type="text" value={localSettings.llm_config?.base_url || ''} onChange={e => handleLlmChange('base_url', e.target.value)}
                   placeholder="e.g. https://api.openai.com/v1"
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand/20 transition-all outline-none" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">API Protocol Type</label>
+                <select value={localSettings.llm_config?.api_type || 'chat_completions'} onChange={e => handleLlmChange('api_type', e.target.value as 'chat_completions' | 'messages')}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand/20 transition-all outline-none"
+                >
+                  <option value="chat_completions">OpenAI Chat Completions</option>
+                  <option value="messages">Anthropic Messages</option>
+                </select>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">API Key</label>
