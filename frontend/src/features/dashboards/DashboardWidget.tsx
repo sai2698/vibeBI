@@ -6,7 +6,7 @@ import EChartWrapper from '../../components/charts/EChartWrapper';
 import DrillBreadcrumbs from '../../components/charts/DrillBreadcrumbs';
 import { transformChartData } from '../../utils/chartUtils';
 import { useDrillDown } from '../../components/charts/useDrillDown';
-import { AlertCircle, MoreHorizontal, FileSpreadsheet, Image as ImageIcon, Type } from 'lucide-react';
+import { AlertCircle, MoreHorizontal, FileSpreadsheet, Image as ImageIcon, Type, Maximize2, X } from 'lucide-react';
 import * as echarts from 'echarts';
 import toast from 'react-hot-toast';
 
@@ -54,10 +54,22 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [userToggledTitleHidden, setUserToggledTitleHidden] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isFullScreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullScreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen]);
 
   useEffect(() => {
     setPortalTarget(document.getElementById('drill-bar-portal'));
@@ -337,7 +349,15 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
 
       {/* Hover Action Menu */}
       {(isHovered || isMenuOpen) && chartResponse && (
-        <div className="absolute top-2 right-2 z-40 transition-opacity duration-200" ref={menuRef}>
+        <div className="absolute top-2 right-2 z-40 transition-opacity duration-200 flex items-center gap-1.5" ref={menuRef}>
+          <button
+            onClick={() => setIsFullScreen(true)}
+            className="p-1.5 bg-white/80 hover:bg-white shadow-sm border border-slate-200 rounded-md text-slate-500 hover:text-brand transition-all backdrop-blur-sm"
+            title="Full Screen"
+          >
+            <Maximize2 size={14} />
+          </button>
+
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="p-1.5 bg-white/80 hover:bg-white shadow-sm border border-slate-200 rounded-md text-slate-500 hover:text-brand transition-all backdrop-blur-sm"
@@ -348,6 +368,16 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
 
           {isMenuOpen && (
             <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-slate-200 shadow-lg rounded-lg overflow-hidden py-1 animate-in fade-in slide-in-from-top-1">
+              <button
+                onClick={() => {
+                  setIsFullScreen(true);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-brand flex items-center gap-2 font-medium transition-colors"
+              >
+                <Maximize2 size={12} />
+                Full Screen
+              </button>
               <button
                 onClick={handleDownloadCSV}
                 className="w-full text-left px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-brand flex items-center gap-2 font-medium transition-colors"
@@ -415,6 +445,71 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({
           />
         </div>,
         portalTarget
+      )}
+
+      {/* Full Screen Portal */}
+      {isFullScreen && createPortal(
+        <div className="fixed inset-0 z-[250] bg-slate-900/60 backdrop-blur-sm p-4 md:p-8 flex items-center justify-center animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-950 w-full h-full max-w-6xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-150 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-base">
+                  {chartResponse?.title || 'Chart'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadCSV}
+                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-brand transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                  title="Download CSV"
+                >
+                  <FileSpreadsheet size={14} />
+                  <span className="hidden sm:inline">CSV</span>
+                </button>
+                <button
+                  onClick={handleDownloadPNG}
+                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-brand transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                  title="Download PNG"
+                >
+                  <ImageIcon size={14} />
+                  <span className="hidden sm:inline">PNG</span>
+                </button>
+                <div className="w-px h-5 bg-slate-200 dark:bg-slate-800 mx-1" />
+                <button
+                  onClick={() => setIsFullScreen(false)}
+                  className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                  title="Close Full Screen"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 min-h-0 p-6 bg-slate-50 dark:bg-slate-900">
+              {chartResponse && (
+                <EChartWrapper
+                  chartType={chart_type}
+                  data={chartData}
+                  height="100%"
+                  title={chartResponse.title}
+                  visualConfig={chartResponse.visual_config}
+                  hideHeader={true}
+                  theme={theme}
+                  drillStack={drill.drillStack}
+                  availableColumns={availableColumns}
+                  currentDimensionName={activeDimensionName}
+                  onDrillDown={drill.drillDown}
+                  onDrillUp={drill.drillUp}
+                  onDrillToLevel={drill.drillToLevel}
+                  onResetDrill={drill.resetDrill}
+                  onFilterByValue={drill.filterByValue}
+                  onExcludeValue={drill.excludeValue}
+                />
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
