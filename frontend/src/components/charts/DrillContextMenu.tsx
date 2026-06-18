@@ -9,6 +9,8 @@ import {
   RotateCcw,
   ChevronRight,
   Layers,
+  Search,
+  X,
 } from 'lucide-react';
 
 import { displayCategoryValue } from '../../utils/chartUtils';
@@ -64,21 +66,38 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
   onClose,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const isHoveringSubRef = useRef(false);
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
   const [showDrillSub, setShowDrillSub] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [isSubmenuLeft, setIsSubmenuLeft] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleMouseEnterSub = () => {
+    isHoveringSubRef.current = true;
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     setShowDrillSub(true);
   };
 
   const handleMouseLeaveSub = () => {
+    isHoveringSubRef.current = false;
     hoverTimeoutRef.current = setTimeout(() => {
-      setShowDrillSub(false);
+      const isSearchFocused = document.activeElement === searchInputRef.current;
+      if (!isHoveringSubRef.current && !isSearchFocused) {
+        setShowDrillSub(false);
+      }
     }, 300); // 300ms forgiving delay to cross the gap
+  };
+
+  const handleSearchBlur = () => {
+    setTimeout(() => {
+      const isSearchFocused = document.activeElement === searchInputRef.current;
+      if (!isHoveringSubRef.current && !isSearchFocused) {
+        setShowDrillSub(false);
+      }
+    }, 100);
   };
 
   // Adjust position to stay within viewport
@@ -135,6 +154,10 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
     (col) => col !== currentDimension && col !== clickInfo.dimensionName,
   );
 
+  const filteredDrillTargets = drillTargets.filter((col) =>
+    col.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
   const menuContent = (
     <div
       ref={menuRef}
@@ -181,19 +204,47 @@ const DrillContextMenu: React.FC<DrillContextMenuProps> = ({
                 <Layers size={10} />
                 Select dimension to drill into
               </div>
-              {drillTargets.map((col) => (
-                <button
-                  key={col}
-                  className="drill-submenu-item"
-                  onClick={() => {
-                    onDrillDown(col);
-                    onClose();
-                  }}
-                >
-                  <span className="drill-submenu-item-dot" />
-                  {col}
-                </button>
-              ))}
+
+              {/* Search Box */}
+              <div className="drill-submenu-search-container" onClick={(e) => e.stopPropagation()}>
+                <Search size={12} className="drill-submenu-search-icon" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search dimensions..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onBlur={handleSearchBlur}
+                  className="drill-submenu-search-input"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="drill-submenu-search-clear"
+                    type="button"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+              </div>
+
+              {filteredDrillTargets.length === 0 ? (
+                <div className="drill-submenu-empty">No dimensions found</div>
+              ) : (
+                filteredDrillTargets.map((col) => (
+                  <button
+                    key={col}
+                    className="drill-submenu-item"
+                    onClick={() => {
+                      onDrillDown(col);
+                      onClose();
+                    }}
+                  >
+                    <span className="drill-submenu-item-dot" />
+                    {col}
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>

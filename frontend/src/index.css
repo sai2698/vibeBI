@@ -377,6 +377,80 @@
   transform: scale(1.5);
 }
 
+/* Sub-menu Search Container */
+.drill-submenu-search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 2px 4px 6px 4px;
+}
+
+.drill-submenu-search-icon {
+  position: absolute;
+  left: 8px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.drill-submenu-search-input {
+  width: 100%;
+  padding: 5px 24px 5px 24px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  color: #1e293b;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.drill-submenu-search-input:focus {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.drill-submenu-search-clear {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+}
+
+.drill-submenu-search-clear:hover {
+  background: #f1f5f9;
+  color: #dc2626;
+}
+
+.drill-submenu-empty {
+  padding: 12px 8px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.dark .drill-submenu-search-input {
+  background: rgba(15, 23, 42, 0.3);
+  border-color: rgba(148, 163, 184, 0.15);
+  color: #f1f5f9;
+}
+
+.dark .drill-submenu-search-input:focus {
+  background: rgba(15, 23, 42, 0.5);
+  border-color: #818cf8;
+}
+
 /* ── Drill Breadcrumbs ── */
 .drill-breadcrumbs {
   display: flex;
