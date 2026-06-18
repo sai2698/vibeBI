@@ -69,7 +69,7 @@ const App: React.FC = () => {
                   <Route path="/settings/rls" element={<ProtectedRoute requiredPermission="admin:all"><RLSManagementPage /></ProtectedRoute>} />
                   <Route path="/scheduler" element={<ProtectedRoute requiredPermission="menu:dashboards"><SchedulerPage /></ProtectedRoute>} />
                   <Route path="/mailer" element={<ProtectedRoute requiredPermission="menu:dashboards"><MailerPage /></ProtectedRoute>} />
-                  <Route path="/ai" element={<ProtectedRoute requiredPermission="menu:sqllab"><AIWorkspacePage /></ProtectedRoute>} />
+                  <Route path="/ai" element={<ProtectedRoute requiredPermission="menu:ai_workspace"><AIWorkspacePage /></ProtectedRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppShell>

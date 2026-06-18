@@ -34,6 +34,7 @@ async def seed():
             ("menu:dashboards", "Access to Dashboards"),
             ("menu:chart_builder", "Access to Chart Builder"),
             ("menu:sqllab", "Access to SQL Lab"),
+            ("menu:ai_workspace", "Access to AI Workspace"),
             ("menu:data_management", "Access to Data Management"),
             ("menu:admin", "Access to Administration"),
             ("menu:self_service", "Access to Self Service"),
@@ -80,11 +81,11 @@ async def seed():
                 await session.flush()
                 await session.refresh(perm)
             perm_map[p_name] = perm.id
-
+ 
         # Create Roles
         admin_perms = [p[0] for p in default_permissions] # Admin gets everything
         alpha_perms = [
-            "menu:dashboards", "menu:sqllab", "menu:chart_builder", "menu:data_management",
+            "menu:dashboards", "menu:sqllab", "menu:ai_workspace", "menu:chart_builder", "menu:data_management",
             "menu:self_service", "menu:scheduler", "menu:mailer",
             "dashboard:read", "dashboard:write", "dashboard:delete", "dashboard:share",
             "chart:read", "chart:write", "chart:delete",

@@ -20,7 +20,7 @@ const Sidebar: React.FC = () => {
     { name: 'Chart Builder', path: '/charts/builder', icon: <Plus size={18} />, permission: 'menu:chart_builder' },
     { name: 'Code Playground', path: '/charts/playground', icon: <Code2 size={18} />, permission: 'menu:chart_builder' },
     { name: 'SQL Lab', path: '/sqllab', icon: <Terminal size={18} />, permission: 'menu:sqllab' },
-    { name: 'AI Workspace', path: '/ai', icon: <Bot size={18} />, permission: 'menu:sqllab' },
+    { name: 'AI Workspace', path: '/ai', icon: <Bot size={18} />, permission: 'menu:ai_workspace' },
     { name: 'Datasources', path: '/data/datasources', icon: <Database size={18} />, permission: 'menu:data_management' },
     { name: 'Datasets', path: '/data/datasets', icon: <Database size={18} />, permission: 'menu:data_management' },
     { name: 'Semantic Layer', path: '/data/semantic', icon: <Layers size={18} />, permission: 'menu:data_management' },
