@@ -89,8 +89,24 @@ const RelationshipsTab: React.FC<Props> = ({ datasetId, datasets }) => {
 
   const getDatasetName = (id: number) => (datasets ?? []).find(d => d.id === id)?.name || `Unknown (${id})`;
 
-  const safeLeftColumns = Array.isArray(leftDataset?.columns) ? leftDataset.columns : [];
-  const safeRightColumns = Array.isArray(rightDataset?.columns) ? rightDataset.columns : [];
+  const safeLeftColumns = [
+    ...(Array.isArray(leftDataset?.columns) ? leftDataset.columns : []),
+    ...(Array.isArray(leftDataset?.calculated_columns) 
+      ? leftDataset.calculated_columns.map((cc: any) => ({
+          column_name: cc.name,
+          friendly_name: `${cc.friendly_name || cc.name} (Calculated)`
+        }))
+      : [])
+  ];
+  const safeRightColumns = [
+    ...(Array.isArray(rightDataset?.columns) ? rightDataset.columns : []),
+    ...(Array.isArray(rightDataset?.calculated_columns) 
+      ? rightDataset.calculated_columns.map((cc: any) => ({
+          column_name: cc.name,
+          friendly_name: `${cc.friendly_name || cc.name} (Calculated)`
+        }))
+      : [])
+  ];
   const safeJoins = Array.isArray(joins) ? joins : [];
 
   return (

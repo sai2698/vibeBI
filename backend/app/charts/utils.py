@@ -575,6 +575,47 @@ def build_sql_query(dataset_or_datasets, query_config: Dict[str, Any], filters: 
         
     all_joins = (joins or []) + custom_joins
     
+    # Resolve calculated columns in all join conditions
+    def resolve_calculated_columns_in_join_condition(condition: str, datasets: dict) -> str:
+        if not condition:
+            return condition
+        resolved = condition
+        pattern = r'ds_(\d+)\.([a-zA-Z0-9_]+)'
+        
+        def replace_match(match):
+            ds_id_str = match.group(1)
+            col_name = match.group(2)
+            ds_id = int(ds_id_str)
+            
+            dataset = datasets.get(ds_id)
+            if dataset:
+                # Check calculated columns
+                calc_col = next((c for c in dataset.calculated_columns if c.name == col_name), None)
+                if calc_col:
+                    expr = calc_col.expression
+                    # Replace physical column names in expression with dataset-prefixed versions
+                    for physical_col in dataset.columns:
+                        phys_pattern = r'(?<!\.)\b' + re.escape(physical_col.column_name) + r'\b'
+                        expr = re.sub(phys_pattern, f"ds_{ds_id}.{physical_col.column_name}", expr)
+                    return f"({expr})"
+            return match.group(0)
+            
+        resolved = re.sub(pattern, replace_match, resolved)
+        return resolved
+
+    resolved_joins = []
+    for j in all_joins:
+        class ResolvedJoin:
+            def __init__(self, original_join, resolved_condition):
+                self.id = getattr(original_join, 'id', None)
+                self.left_dataset_id = original_join.left_dataset_id
+                self.right_dataset_id = original_join.right_dataset_id
+                self.join_type = original_join.join_type
+                self.join_condition = resolved_condition
+        resolved_cond = resolve_calculated_columns_in_join_condition(j.join_condition, datasets)
+        resolved_joins.append(ResolvedJoin(j, resolved_cond))
+    all_joins = resolved_joins
+    
     # Build adjacency list for join graph
     join_graph: Dict[int, List[object]] = {ds_id: [] for ds_id in required_dataset_ids}
     

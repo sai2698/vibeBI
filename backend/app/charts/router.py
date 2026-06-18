@@ -239,7 +239,8 @@ async def get_chart_data(
         result = await db.execute(
             select(DataMart)
             .options(selectinload(DataMart.datasets).selectinload(Dataset.columns),
-                     selectinload(DataMart.datasets).selectinload(Dataset.metrics))
+                     selectinload(DataMart.datasets).selectinload(Dataset.metrics),
+                     selectinload(DataMart.datasets).selectinload(Dataset.calculated_columns))
             .where(DataMart.id == req.datamart_id)
         )
         datamart = result.scalar_one_or_none()

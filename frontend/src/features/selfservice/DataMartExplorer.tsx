@@ -1183,9 +1183,22 @@ const DataMartExplorer: React.FC = () => {
                               className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs outline-none disabled:opacity-50"
                             >
                                <option value="">Select Left Column</option>
-                               {datamart?.datasets?.find((d: any) => d.id === Number(newJoin.left_dataset_id))?.columns?.map((c: any) => (
-                                 <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
-                               ))}
+                               {(() => {
+                                 const ds = datamart?.datasets?.find((d: any) => d.id === Number(newJoin.left_dataset_id));
+                                 if (!ds) return null;
+                                 const cols = [
+                                   ...(Array.isArray(ds.columns) ? ds.columns : []),
+                                   ...(Array.isArray(ds.calculated_columns)
+                                     ? ds.calculated_columns.map((cc: any) => ({
+                                         column_name: cc.name,
+                                         friendly_name: `${cc.friendly_name || cc.name} (Calculated)`
+                                       }))
+                                     : [])
+                                 ];
+                                 return cols.map((c: any) => (
+                                   <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
+                                 ));
+                               })()}
                             </select>
                           </div>
 
@@ -1207,9 +1220,22 @@ const DataMartExplorer: React.FC = () => {
                               className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs outline-none disabled:opacity-50"
                             >
                                <option value="">Select Right Column</option>
-                               {datamart?.datasets?.find((d: any) => d.id === Number(newJoin.right_dataset_id))?.columns?.map((c: any) => (
-                                 <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
-                               ))}
+                               {(() => {
+                                 const ds = datamart?.datasets?.find((d: any) => d.id === Number(newJoin.right_dataset_id));
+                                 if (!ds) return null;
+                                 const cols = [
+                                   ...(Array.isArray(ds.columns) ? ds.columns : []),
+                                   ...(Array.isArray(ds.calculated_columns)
+                                     ? ds.calculated_columns.map((cc: any) => ({
+                                         column_name: cc.name,
+                                         friendly_name: `${cc.friendly_name || cc.name} (Calculated)`
+                                       }))
+                                     : [])
+                                 ];
+                                 return cols.map((c: any) => (
+                                   <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
+                                 ));
+                               })()}
                             </select>
                           </div>
                        </div>
@@ -1556,9 +1582,22 @@ const DataMartExplorer: React.FC = () => {
                     className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand transition-colors disabled:opacity-50"
                   >
                     <option value="">Select Left Column</option>
-                    {datamart?.datasets?.find((d: any) => d.id === Number(editingJoin.left_dataset_id))?.columns?.map((c: any) => (
-                      <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
-                    ))}
+                    {(() => {
+                      const ds = datamart?.datasets?.find((d: any) => d.id === Number(editingJoin.left_dataset_id));
+                      if (!ds) return null;
+                      const cols = [
+                        ...(Array.isArray(ds.columns) ? ds.columns : []),
+                        ...(Array.isArray(ds.calculated_columns)
+                          ? ds.calculated_columns.map((cc: any) => ({
+                              column_name: cc.name,
+                              friendly_name: `${cc.friendly_name || cc.name} (Calculated)`
+                            }))
+                          : [])
+                      ];
+                      return cols.map((c: any) => (
+                        <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
+                      ));
+                    })()}
                   </select>
                 </div>
 
@@ -1571,9 +1610,22 @@ const DataMartExplorer: React.FC = () => {
                     className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand transition-colors disabled:opacity-50"
                   >
                     <option value="">Select Right Column</option>
-                    {datamart?.datasets?.find((d: any) => d.id === Number(editingJoin.right_dataset_id))?.columns?.map((c: any) => (
-                      <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
-                    ))}
+                    {(() => {
+                      const ds = datamart?.datasets?.find((d: any) => d.id === Number(editingJoin.right_dataset_id));
+                      if (!ds) return null;
+                      const cols = [
+                        ...(Array.isArray(ds.columns) ? ds.columns : []),
+                        ...(Array.isArray(ds.calculated_columns)
+                          ? ds.calculated_columns.map((cc: any) => ({
+                              column_name: cc.name,
+                              friendly_name: `${cc.friendly_name || cc.name} (Calculated)`
+                            }))
+                          : [])
+                      ];
+                      return cols.map((c: any) => (
+                        <option key={c.column_name} value={c.column_name}>{c.friendly_name || c.column_name}</option>
+                      ));
+                    })()}
                   </select>
                 </div>
               </div>
