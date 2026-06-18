@@ -16,7 +16,7 @@ import {
   Filter, Settings, FilterX,
   BarChart3, PieChart, LineChart, TrendingUp, Table as TableIcon, Trash2,
   Bookmark, Info, MoreHorizontal, Clock, ExternalLink,
-  ChevronDown, Undo2, Redo2, Check, Sparkles, Palette, RefreshCw
+  ChevronDown, Undo2, Redo2, Check, Sparkles, Palette, RefreshCw, GripVertical
 } from 'lucide-react';
 import DeleteConfirmationModal from '../../components/ui/DeleteConfirmationModal';
 import DashboardAIChat from './DashboardAIChat';
@@ -340,6 +340,32 @@ const DashboardViewPage: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [pages, setPages] = useState<DashboardPage[]>([]);
   const [activePageId, setActivePageId] = useState<string>('');
+  const [draggedPageIndex, setDraggedPageIndex] = useState<number | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedPageIndex(index);
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    if (draggedPageIndex === null) return;
+    e.preventDefault();
+    if (draggedPageIndex !== index) {
+      const updatedPages = [...pages];
+      const [removed] = updatedPages.splice(draggedPageIndex, 1);
+      updatedPages.splice(index, 0, removed);
+      setPages(updatedPages);
+      setDraggedPageIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedPageIndex(null);
+    setActiveDragId(null);
+  };
 
   // New State for Filters and Refresh
   const [globalFilters, setGlobalFilters] = useState<Record<string, any>>({});
@@ -1331,44 +1357,72 @@ const DashboardViewPage: React.FC = () => {
       {/* Dashboard Pages Tabs */}
       {dashboard?.enable_pages && (
         <div className="flex items-center gap-1 px-4 pt-2 bg-slate-50 border-b border-slate-200 overflow-x-auto custom-scrollbar shrink-0">
-        {pages.map((page) => (
-          <div
-            key={page.id}
-            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-colors cursor-pointer select-none whitespace-nowrap min-w-[100px] group ${
-              activePageId === page.id 
-                ? 'border-brand bg-white text-brand font-bold' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-            }`}
-            onClick={() => setActivePageId(page.id)}
-          >
-            {isEditing ? (
-              <input
-                value={page.name}
-                onChange={(e) => {
-                  setPages(prev => prev.map(p => p.id === page.id ? { ...p, name: e.target.value } : p));
-                }}
-                className="bg-transparent outline-none w-24 text-inherit font-inherit"
-                placeholder="Page Name"
-              />
-            ) : (
-              <span>{page.name}</span>
-            )}
-            
-            {isEditing && pages.length > 1 && (
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  const newPages = pages.filter(p => p.id !== page.id);
-                  setPages(newPages);
-                  if (activePageId === page.id) setActivePageId(newPages[0].id);
-                }}
-                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
-          </div>
-        ))}
+        {pages.map((page, index) => {
+          const isDraggingThis = draggedPageIndex === index;
+          return (
+            <div
+              key={page.id}
+              draggable={isEditing && activeDragId === page.id}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragEnd={handleDragEnd}
+              className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all cursor-pointer select-none whitespace-nowrap min-w-[100px] group ${
+                isDraggingThis ? 'opacity-40 border-dashed bg-slate-100' : ''
+              } ${
+                activePageId === page.id 
+                  ? 'border-brand bg-white text-brand font-bold' 
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+              onClick={() => setActivePageId(page.id)}
+            >
+              {isEditing && (
+                <div
+                  className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 p-0.5"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setActiveDragId(page.id);
+                  }}
+                  onMouseUp={(e) => {
+                    e.stopPropagation();
+                    setActiveDragId(null);
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <GripVertical size={14} />
+                </div>
+              )}
+
+              {isEditing ? (
+                <input
+                  value={page.name}
+                  onChange={(e) => {
+                    setPages(prev => prev.map(p => p.id === page.id ? { ...p, name: e.target.value } : p));
+                  }}
+                  className="bg-transparent outline-none w-24 text-inherit font-inherit"
+                  placeholder="Page Name"
+                />
+              ) : (
+                <span>{page.name}</span>
+              )}
+              
+              {isEditing && pages.length > 1 && (
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    const newPages = pages.filter(p => p.id !== page.id);
+                    setPages(newPages);
+                    if (activePageId === page.id) setActivePageId(newPages[0].id);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
+          );
+        })}
         {isEditing && (
           <button
             onClick={() => {
