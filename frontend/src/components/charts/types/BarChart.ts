@@ -1,6 +1,11 @@
 import * as echarts from 'echarts';
 import { createChartConfigSchema, type ChartConfigSchema, getConfigValue } from './config-schema';
 import { smartCompareCategories } from '../../../utils/chartUtils';
+import {
+  axisLabelFormatter,
+  autoRotation,
+  gridBottomForRotation,
+} from '../../../utils/numberFormat';
 
 type EChartsOption = echarts.EChartsOption;
 
@@ -416,8 +421,32 @@ export function buildBarChartOptions({
     },
   };
 
+  // Smart rotation: auto-pick based on category count unless user overrode
+  const effectiveRotation = autoRotation(displayCategories.length, cfg.xAxisRotation || null);
+  const gridBottom = gridBottomForRotation(isHorizontal ? 0 : effectiveRotation, showLegend);
+
+  // Override category axis label with smart rotation + truncation
+  categoryAxis.axisLabel = {
+    rotate: isHorizontal ? 0 : effectiveRotation,
+    overflow: 'truncate',
+    width: effectiveRotation > 0 ? 80 : 120,
+    interval: 'auto',
+    hideOverlap: true,
+  };
+
+  // Override value axis label formatter for compact K/M/B/T
+  valueAxis.axisLabel = {
+    formatter: axisLabelFormatter,
+    hideOverlap: true,
+  };
+  // Enough left margin so formatted labels like "1.25B" don't get clipped
+  valueAxis.nameGap = isHorizontal ? 40 : 45;
+
   return {
-    tooltip: { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+    },
     color: colors,
     animationDuration: cfg.animationDuration,
     toolbox: {
@@ -442,11 +471,13 @@ export function buildBarChartOptions({
       bottom: 0,
       orient: cfg.legendOrientation,
       type: 'scroll',
+      pageIconSize: 10,
     },
     grid: {
-      left: '3%',
+      left: isHorizontal ? '4%' : '3%',
       right: '4%',
-      bottom: showLegend ? '12%' : '8%',
+      bottom: gridBottom,
+      top: cfg.toolboxShow ? '14%' : '8%',
       containLabel: true,
     },
     xAxis: isHorizontal ? valueAxis : categoryAxis,
@@ -456,7 +487,14 @@ export function buildBarChartOptions({
       type: 'bar',
       data: s.data || [],
       stack: cfg.stacking ? 'total' : undefined,
-      label: { show: cfg.showLabels, position: cfg.labelPosition as any },
+      label: {
+        show: cfg.showLabels,
+        position: cfg.labelPosition as any,
+        formatter: (p: any) => {
+          const v = typeof p.value === 'object' ? (p.value?.[1] ?? p.value?.[0]) : p.value;
+          return axisLabelFormatter(Number(v));
+        },
+      },
       barMaxWidth: cfg.barWidth,
       itemStyle: { borderRadius: isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] },
     })),

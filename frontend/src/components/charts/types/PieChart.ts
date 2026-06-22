@@ -4,6 +4,9 @@ import {
   type ChartConfigSchema,
   getConfigValue 
 } from './config-schema';
+import {
+  pieLabelMode,
+} from '../../../utils/numberFormat';
 
 type EChartsOption = echarts.EChartsOption;
 
@@ -257,61 +260,70 @@ export function buildPieChartOptions(options: PieChartOptions): EChartsOption {
   const padAngle = getConfigValue(cfg, 'pie.padAngle') ?? 0;
   const toolboxShow = getConfigValue(cfg, 'toolbox.show') === true;
   const animationDuration = getConfigValue(cfg, 'animation.duration') ?? 1000;
-
+  const showLabels = getConfigValue(cfg, 'dataLabels.show') ?? true;
+  const explicitPosition = getConfigValue(cfg, 'dataLabels.position') ?? null;
   const displayCategories = categories.length > 0 ? categories : pieData.map(d => d.name);
   const colors = getConfigValue(cfg, 'colorPalette') || (cfg as any)?.colorPalette;
+  const showLegend = getConfigValue(cfg, 'legend.show') ?? true;
+
+  // Auto label mode: outside ≤6 slices, inside 7-12, none >12
+  const labelMode = showLabels ? pieLabelMode(pieData.length, explicitPosition) : 'none';
+  const effectiveOuter = labelMode === 'outside' ? Math.min(outerRadius, 68) : outerRadius;
+
+  const labelConfig: any = labelMode === 'outside'
+    ? { show: true, position: 'outside', formatter: '{b}\n{d}%', fontSize: 11, lineHeight: 14, overflow: 'truncate', width: 80 }
+    : labelMode === 'inside'
+    ? { show: true, position: 'inside', formatter: '{d}%', fontSize: 11, fontWeight: 'bold', color: '#fff' }
+    : { show: false };
+
+  const labelLineConfig: any = labelMode === 'outside'
+    ? { show: true, length: 10, length2: 14, smooth: 0.5, lineStyle: { width: 1.5 }, minTurnAngle: 90 }
+    : { show: false };
 
   return {
     color: colors,
     tooltip: {
       trigger: 'item',
+      confine: true,
       formatter: '{b}: {c} ({d}%)',
     },
     animationDuration,
     toolbox: {
       show: toolboxShow,
-      feature: {
-        saveAsImage: { show: true },
-        dataView: { show: true, readOnly: false },
-        restore: { show: true },
-      },
+      feature: { saveAsImage: { show: true }, dataView: { show: true, readOnly: false }, restore: { show: true } },
     },
     legend: {
-      show: getConfigValue(cfg, 'legend.show') ?? true,
+      show: showLegend,
       orient: getConfigValue(cfg, 'legend.orientation') ?? 'horizontal',
       top: getConfigValue(cfg, 'legend.position') === 'top' ? 0 : undefined,
-      bottom: getConfigValue(cfg, 'legend.position') === 'bottom' ? 0 : undefined,
+      bottom: getConfigValue(cfg, 'legend.position') === 'bottom' ? 5 : undefined,
       left: getConfigValue(cfg, 'legend.position') === 'left' ? 0 : undefined,
       right: getConfigValue(cfg, 'legend.position') === 'right' ? 0 : undefined,
       data: displayCategories,
+      type: 'scroll',
+      pageIconSize: 10,
     },
     series: [
       {
         name: series[0]?.name ?? 'Data',
         type: 'pie',
         selectedMode: 'multiple',
-        radius: isDonut 
-          ? [`${innerRadius}%`, `${outerRadius}%`] 
-          : `${outerRadius}%`,
+        radius: isDonut ? [`${innerRadius}%`, `${effectiveOuter}%`] : `${effectiveOuter}%`,
         roseType: isRoseType,
-        padAngle: padAngle,
+        padAngle,
+        avoidLabelOverlap: true,
+        minShowLabelAngle: 5,
         itemStyle: {
-          borderRadius: borderRadius,
+          borderRadius,
           borderColor: borderRadius > 0 || padAngle > 0 ? '#fff' : undefined,
           borderWidth: borderRadius > 0 || padAngle > 0 ? 2 : undefined,
         },
         data: pieData,
-        label: {
-          show: getConfigValue(cfg, 'dataLabels.show') ?? true,
-          formatter: getConfigValue(cfg, 'dataLabels.formatter') ?? '{b}: {c} ({d}%)',
-          position: getConfigValue(cfg, 'dataLabels.position') ?? 'outside',
-        },
+        label: labelConfig,
+        labelLine: labelLineConfig,
         emphasis: {
-          itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: 'rgba(0, 0, 0, 0.5)',
-          },
+          itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' },
+          label: { show: labelMode !== 'none', fontWeight: 'bold' },
         },
       },
     ],

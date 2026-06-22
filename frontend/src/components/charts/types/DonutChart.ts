@@ -4,6 +4,10 @@ import {
   type ChartConfigSchema,
   getConfigValue 
 } from './config-schema';
+import {
+  pieLabelMode,
+  formatAxisValue,
+} from '../../../utils/numberFormat';
 
 type EChartsOption = echarts.EChartsOption;
 
@@ -257,84 +261,101 @@ export function buildDonutChartOptions(options: DonutChartOptions): EChartsOptio
   const padAngle = getConfigValue(cfg, 'donut.padAngle') ?? 0;
   const toolboxShow = getConfigValue(cfg, 'toolbox.show') === true;
   const animationDuration = getConfigValue(cfg, 'animation.duration') ?? 1000;
+  const showLabels = getConfigValue(cfg, 'dataLabels.show') ?? true;
+  const explicitPosition = getConfigValue(cfg, 'dataLabels.position') ?? null;
 
-  // Calculate total
+  // Calculate total (formatted for center display)
   const total = donutData.reduce((sum, item) => sum + item.value, 0);
+  const totalFormatted = formatAxisValue(total);
 
   const displayCategories = categories.length > 0 ? categories : donutData.map(d => d.name);
   const colors = getConfigValue(cfg, 'colorPalette') || (cfg as any)?.colorPalette;
+  const showLegend = getConfigValue(cfg, 'legend.show') ?? true;
+
+  // Auto label mode
+  const labelMode = showLabels ? pieLabelMode(donutData.length, explicitPosition) : 'none';
+  const effectiveOuter = labelMode === 'outside' ? Math.min(outerRadius, 72) : outerRadius;
+
+  const labelConfig: any = labelMode === 'outside'
+    ? { show: true, position: 'outside', formatter: '{b}\n{d}%', fontSize: 11, lineHeight: 14, overflow: 'truncate', width: 80 }
+    : labelMode === 'inside'
+    ? { show: true, position: 'inside', formatter: '{d}%', fontSize: 11, fontWeight: 'bold', color: '#fff' }
+    : { show: false };
+
+  const labelLineConfig: any = labelMode === 'outside'
+    ? { show: true, length: 10, length2: 14, smooth: 0.5, lineStyle: { width: 1.5 }, minTurnAngle: 90 }
+    : { show: false };
+
+  // Center graphic for total (separate from series label to avoid conflicts)
+  const centerGraphic = showTotal ? [
+    {
+      type: 'text',
+      style: {
+        text: totalLabel,
+        x: '50%',
+        y: 'calc(50% - 14px)',
+        textAlign: 'center',
+        fill: '#64748b',
+        font: '12px sans-serif',
+      } as any,
+    },
+    {
+      type: 'text',
+      style: {
+        text: totalFormatted,
+        x: '50%',
+        y: 'calc(50% + 10px)',
+        textAlign: 'center',
+        fill: '#1e293b',
+        font: 'bold 20px sans-serif',
+      } as any,
+    },
+  ] : [];
 
   return {
     color: colors,
     tooltip: {
       trigger: 'item',
+      confine: true,
       formatter: '{b}: {c} ({d}%)',
     },
     animationDuration,
     toolbox: {
       show: toolboxShow,
-      feature: {
-        saveAsImage: { show: true },
-        dataView: { show: true, readOnly: false },
-        restore: { show: true },
-      },
+      feature: { saveAsImage: { show: true }, dataView: { show: true, readOnly: false }, restore: { show: true } },
     },
     legend: {
-      show: getConfigValue(cfg, 'legend.show') ?? true,
+      show: showLegend,
       orient: getConfigValue(cfg, 'legend.orientation') ?? 'horizontal',
       top: getConfigValue(cfg, 'legend.position') === 'top' ? 0 : undefined,
-      bottom: getConfigValue(cfg, 'legend.position') === 'bottom' ? 0 : undefined,
+      bottom: getConfigValue(cfg, 'legend.position') === 'bottom' ? 5 : undefined,
       left: getConfigValue(cfg, 'legend.position') === 'left' ? 0 : undefined,
       right: getConfigValue(cfg, 'legend.position') === 'right' ? 0 : undefined,
       data: displayCategories,
+      type: 'scroll',
+      pageIconSize: 10,
     },
+    graphic: centerGraphic,
     series: [
       {
         name: series[0]?.name ?? 'Data',
         type: 'pie',
-        radius: [`${innerRadius}%`, `${outerRadius}%`],
-        padAngle: padAngle,
+        radius: [`${innerRadius}%`, `${effectiveOuter}%`],
+        padAngle,
+        avoidLabelOverlap: true,
+        minShowLabelAngle: 5,
         itemStyle: {
-          borderRadius: borderRadius,
+          borderRadius,
           borderColor: borderRadius > 0 || padAngle > 0 ? '#fff' : undefined,
           borderWidth: borderRadius > 0 || padAngle > 0 ? 2 : undefined,
         },
         data: donutData,
-        label: {
-          show: getConfigValue(cfg, 'dataLabels.show') ?? true,
-          formatter: getConfigValue(cfg, 'dataLabels.formatter') ?? '{b}: {d}%',
-          position: getConfigValue(cfg, 'dataLabels.position') ?? 'inside',
-        },
+        label: labelConfig,
+        labelLine: labelLineConfig,
         emphasis: {
-          itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: 'rgba(0, 0, 0, 0.5)',
-          },
+          itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' },
+          label: { show: labelMode !== 'none', fontWeight: 'bold' },
         },
-        // Add total in center
-        ...(showTotal
-          ? {
-              center: ['50%', '50%'],
-              label: {
-                show: true,
-                formatter: `{a|${totalLabel}}\n{b|${total}}`,
-                rich: {
-                  a: {
-                    fontSize: 12,
-                    color: '#64748b',
-                    lineHeight: 14,
-                  },
-                  b: {
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#1e293b',
-                    lineHeight: 24,
-                  },
-                },
-              },
-            }
-          : {}),
       },
     ],
   };

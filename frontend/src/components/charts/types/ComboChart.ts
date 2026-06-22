@@ -1,6 +1,11 @@
 import * as echarts from 'echarts';
 import { createChartConfigSchema, type ChartConfigSchema, getConfigValue } from './config-schema';
 import { smartCompareCategories } from '../../../utils/chartUtils';
+import {
+  axisLabelFormatter,
+  autoRotation,
+  gridBottomForRotation,
+} from '../../../utils/numberFormat';
 
 type EChartsOption = echarts.EChartsOption;
 
@@ -391,8 +396,14 @@ export function buildComboChartOptions({
     };
   };
 
+  const effectiveRotation = autoRotation(displayCategories.length, cfg.xAxisRotation || null);
+  const gridBottom = gridBottomForRotation(effectiveRotation, cfg.showLegend);
+
   return {
-    tooltip: { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+    },
     color: cfg.colorPalette,
     animationDuration: cfg.animationDuration,
     toolbox: {
@@ -411,11 +422,13 @@ export function buildComboChartOptions({
       bottom: 0,
       orient: cfg.legendOrientation,
       type: 'scroll',
+      pageIconSize: 10,
     },
     grid: {
       left: '3%',
-      right: cfg.yAxisRightShow ? '3%' : '4%',
-      bottom: cfg.showLegend ? '12%' : '8%',
+      right: cfg.yAxisRightShow ? '4%' : '4%',
+      bottom: gridBottom,
+      top: cfg.toolboxShow ? '14%' : '8%',
       containLabel: true,
     },
     xAxis: {
@@ -423,11 +436,14 @@ export function buildComboChartOptions({
       data: displayCategories,
       name: cfg.xAxisTitle || undefined,
       nameLocation: 'middle',
-      nameGap: 35,
+      nameGap: effectiveRotation >= 30 ? 50 : 35,
       nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b' },
       axisLabel: {
-        rotate: cfg.xAxisRotation,
-        overflow: cfg.xAxisTruncate ? 'truncate' : undefined,
+        rotate: effectiveRotation,
+        overflow: 'truncate',
+        width: effectiveRotation > 0 ? 80 : 120,
+        interval: 'auto',
+        hideOverlap: true,
       } as any,
       splitLine: { show: cfg.xAxisShowGridLines },
     },
@@ -435,15 +451,19 @@ export function buildComboChartOptions({
       {
         type: 'value',
         name: cfg.yAxisTitle || undefined,
+        nameGap: 45,
         nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b', align: 'right' },
+        axisLabel: { formatter: axisLabelFormatter, hideOverlap: true },
         splitLine: { show: cfg.yAxisShowGridLines },
         position: 'left',
       },
       {
         type: 'value',
         name: cfg.yAxisRightTitle || undefined,
+        nameGap: 45,
         nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b', align: 'left' },
-        splitLine: { show: false }, // avoid overlapping grid lines
+        axisLabel: { formatter: axisLabelFormatter, hideOverlap: true },
+        splitLine: { show: false },
         position: 'right',
         show: cfg.yAxisRightShow,
       }
@@ -452,14 +472,20 @@ export function buildComboChartOptions({
       const mCfg = getMeasureConfig(idx);
       const isLine = mCfg.type === 'line';
       const isBar = mCfg.type === 'bar';
-      
       return {
         name: s.name,
         type: isLine ? 'line' : 'bar',
         data: s.data || [],
         yAxisIndex: mCfg.axis === 'right' ? 1 : 0,
         stack: cfg.stacking ? (isBar ? 'bar-stack' : 'line-stack') : undefined,
-        label: { show: cfg.showLabels, position: cfg.labelPosition as any },
+        label: {
+          show: cfg.showLabels,
+          position: cfg.labelPosition as any,
+          formatter: (p: any) => {
+            const v = typeof p.value === 'object' ? (p.value?.[1] ?? p.value?.[0]) : p.value;
+            return axisLabelFormatter(Number(v));
+          },
+        },
         barMaxWidth: isBar ? cfg.barWidth : undefined,
         smooth: isLine ? cfg.smooth : undefined,
         symbolSize: isLine ? 6 : undefined,

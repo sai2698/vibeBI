@@ -1,6 +1,11 @@
 import * as echarts from 'echarts';
 import { createChartConfigSchema, type ChartConfigSchema, getConfigValue } from './config-schema';
 import { smartCompareCategories } from '../../../utils/chartUtils';
+import {
+  axisLabelFormatter,
+  autoRotation,
+  gridBottomForRotation,
+} from '../../../utils/numberFormat';
 
 type EChartsOption = echarts.EChartsOption;
 
@@ -428,8 +433,14 @@ export function buildLineChartOptions({
   const colors = cfg.colorPalette;
   const showLegend = cfg.showLegend;
 
+  const effectiveRotation = autoRotation(displayCategories.length, cfg.xAxisRotation || null);
+  const gridBottom = gridBottomForRotation(effectiveRotation, showLegend);
+
   return {
-    tooltip: { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+    },
     color: colors,
     animationDuration: cfg.animationDuration,
     toolbox: {
@@ -454,11 +465,13 @@ export function buildLineChartOptions({
       bottom: 0,
       orient: cfg.legendOrientation,
       type: 'scroll',
+      pageIconSize: 10,
     },
     grid: {
       left: '3%',
       right: '4%',
-      bottom: showLegend ? '12%' : '8%',
+      bottom: gridBottom,
+      top: cfg.toolboxShow ? '14%' : '8%',
       containLabel: true,
     },
     xAxis: {
@@ -467,11 +480,14 @@ export function buildLineChartOptions({
       boundaryGap: false,
       name: cfg.xAxisTitle || undefined,
       nameLocation: 'middle',
-      nameGap: 35,
+      nameGap: effectiveRotation >= 30 ? 50 : 35,
       nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b' },
       axisLabel: {
-        rotate: cfg.xAxisRotation,
-        overflow: cfg.xAxisTruncate ? 'truncate' : undefined,
+        rotate: effectiveRotation,
+        overflow: 'truncate',
+        width: effectiveRotation > 0 ? 80 : 120,
+        interval: 'auto',
+        hideOverlap: true,
       } as any,
       splitLine: {
         show: cfg.xAxisShowGridLines,
@@ -480,7 +496,12 @@ export function buildLineChartOptions({
     yAxis: {
       type: 'value',
       name: cfg.yAxisTitle || undefined,
+      nameGap: 45,
       nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#64748b', align: 'right' },
+      axisLabel: {
+        formatter: axisLabelFormatter,
+        hideOverlap: true,
+      },
       splitLine: {
         show: cfg.yAxisShowGridLines,
       },
@@ -490,7 +511,14 @@ export function buildLineChartOptions({
       type: 'line',
       data: s.data || [],
       stack: cfg.stacking ? 'total' : undefined,
-      label: { show: cfg.showLabels, position: cfg.labelPosition as any },
+      label: {
+        show: cfg.showLabels,
+        position: cfg.labelPosition as any,
+        formatter: (p: any) => {
+          const v = typeof p.value === 'object' ? (p.value?.[1] ?? p.value?.[0]) : p.value;
+          return axisLabelFormatter(Number(v));
+        },
+      },
       smooth: cfg.smooth,
       step: cfg.step || undefined,
       symbol: cfg.showPoints ? cfg.symbol : 'none',

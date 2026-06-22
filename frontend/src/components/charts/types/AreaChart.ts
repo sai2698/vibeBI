@@ -4,6 +4,11 @@ import {
   type ChartConfigSchema,
   getConfigValue 
 } from './config-schema';
+import {
+  axisLabelFormatter,
+  autoRotation,
+  gridBottomForRotation,
+} from '../../../utils/numberFormat';
 
 type EChartsOption = echarts.EChartsOption;
 
@@ -379,11 +384,16 @@ export function buildAreaChartOptions({
   const dataZoomOrient = getConfigValue(cfg, 'dataZoom.orient') || 'horizontal';
   const toolboxShow = getConfigValue(cfg, 'toolbox.show') === true;
   const animationDuration = getConfigValue(cfg, 'animation.duration') ?? 1000;
+  const showLegend = getConfigValue(cfg, 'legend.show') ?? true;
+  const xAxisRotationCfg = getConfigValue(cfg, 'x_axis.labelRotation') ?? 0;
+  const effectiveRotation = autoRotation((categories || []).length, xAxisRotationCfg || null);
+  const gridBottom = gridBottomForRotation(effectiveRotation, Boolean(showLegend));
 
   return {
     color: colors,
     tooltip: {
       trigger: 'axis',
+      confine: true,
       axisPointer: {
         type: 'cross',
         label: {
@@ -410,18 +420,21 @@ export function buildAreaChartOptions({
       }
     ] : undefined,
     legend: {
-      show: getConfigValue(cfg, 'legend.show') ?? true,
+      show: showLegend,
       orient: getConfigValue(cfg, 'legend.orientation') ?? 'horizontal',
       top: getConfigValue(cfg, 'legend.position') === 'top' ? 0 : undefined,
       bottom: getConfigValue(cfg, 'legend.position') === 'bottom' ? 0 : undefined,
       left: getConfigValue(cfg, 'legend.position') === 'left' ? 0 : undefined,
       right: getConfigValue(cfg, 'legend.position') === 'right' ? 0 : undefined,
       data: series.map((s) => s.name),
+      type: 'scroll',
+      pageIconSize: 10,
     },
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '12%',
+      bottom: gridBottom,
+      top: toolboxShow ? '14%' : '8%',
       containLabel: true,
     },
     xAxis: {
@@ -430,10 +443,13 @@ export function buildAreaChartOptions({
       data: categories,
       name: getConfigValue(cfg, 'x_axis.title'),
       nameLocation: 'middle',
-      nameGap: 25,
+      nameGap: effectiveRotation >= 30 ? 50 : 25,
       axisLabel: {
-        rotate: getConfigValue(cfg, 'x_axis.labelRotation') ?? 0,
-        overflow: getConfigValue(cfg, 'x_axis.truncate') ? 'truncate' : 'break',
+        rotate: effectiveRotation,
+        overflow: 'truncate',
+        width: effectiveRotation > 0 ? 80 : 120,
+        interval: 'auto',
+        hideOverlap: true,
       },
       splitLine: {
         show: getConfigValue(cfg, 'x_axis.showGridLines') === true,
@@ -442,8 +458,11 @@ export function buildAreaChartOptions({
     yAxis: {
       type: 'value',
       name: getConfigValue(cfg, 'y_axis.title'),
+      nameGap: 45,
       axisLabel: {
         show: getConfigValue(cfg, 'y_axis.showLabels') ?? true,
+        formatter: axisLabelFormatter,
+        hideOverlap: true,
       },
       min: getConfigValue(cfg, 'y_axis.min') ?? undefined,
       max: getConfigValue(cfg, 'y_axis.max') ?? undefined,
