@@ -297,10 +297,12 @@ class AIChatSession(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     title = Column(String(255), default="New Conversation")
     bot_id = Column(String(50)) # query, insight, anomaly, predict
+    dashboard_id = Column(Integer, ForeignKey("dashboards.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     messages = relationship("AIChatMessage", back_populates="session", cascade="all, delete-orphan", order_by="AIChatMessage.created_at")
+    dashboard = relationship("Dashboard")
 
 class AIChatMessage(Base):
     __tablename__ = "ai_chat_messages"

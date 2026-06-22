@@ -3,7 +3,7 @@ from .base import BaseTool
 
 async def get_dataset_schemas_summary(dataset_ids: list) -> str:
     from app.database import AsyncSessionLocal
-    from app.models import Dataset
+    from app.models import Dataset, Datasource
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
     
@@ -18,10 +18,19 @@ async def get_dataset_schemas_summary(dataset_ids: list) -> str:
         )
         datasets = res.scalars().all()
         
+        datasource_ids = list(set([ds.datasource_id for ds in datasets if ds.datasource_id]))
+        datasources = {}
+        if datasource_ids:
+            ds_res = await db.execute(select(Datasource).where(Datasource.id.in_(datasource_ids)))
+            datasources = {d.id: d for d in ds_res.scalars().all()}
+        
         summary = "\n### Available Enterprise Database Tables & Columns:\n"
         for ds in datasets:
             table_ref = ds.table_name or f"(Custom SQL: {ds.custom_sql})"
-            summary += f"- Table: `{table_ref}` (Dataset: {ds.name})\n"
+            ds_info = datasources.get(ds.datasource_id)
+            ds_name = ds_info.name if ds_info else "Unknown"
+            ds_engine = ds_info.engine if ds_info else "Unknown"
+            summary += f"- Table: `{table_ref}` (Dataset: {ds.name}, Dataset ID: {ds.id}, Datasource Name: {ds_name}, SQL Dialect/Engine: {ds_engine})\n"
             summary += "  Columns:\n"
             for col in ds.columns:
                 summary += f"    - `{col.column_name}` ({col.data_type or 'unknown'})\n"
@@ -70,13 +79,13 @@ async def run_sql_query_on_dataset(dataset_ids: list, sql: str, user_email: str 
 
 class RunSQLTool(BaseTool):
     name = "run_sql_query"
-    description = "Run a SQL query against the connected enterprise database to retrieve exact data or aggregations. MUST return markdown format. Do not use this for destructive operations."
+    description = "Run a SQL query against the connected enterprise database to retrieve exact data or aggregations. MUST return markdown format. Do not use this for destructive operations. ALWAYS use this tool to validate your SQL queries before using them to render charts. If the query returns an error, analyze the schema and the error message, correct the SQL dialect/syntax, and retry until you get valid results."
     parameters = {
         "type": "object",
         "properties": {
             "sql": {
                 "type": "string",
-                "description": "The exact SQL query to run. E.g., SELECT * FROM users LIMIT 10"
+                "description": "The exact SQL query to run. Ensure you write valid SQL for the specific engine/dialect of the datasource. E.g., SELECT * FROM users LIMIT 10"
             }
         },
         "required": ["sql"]

@@ -1,5 +1,6 @@
 import json
 import asyncio
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from app.schemas import (
     AIBotSchema, AIBotCreate, AIBotUpdate
 )
 from app.auth.dependencies import get_current_active_user
-from app.models import User, AIChatSession, AIChatMessage, AIBot
+from app.models import User, AIChatSession, AIChatMessage, AIBot, Dashboard
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -115,7 +116,8 @@ async def create_chat_session(
     session = AIChatSession(
         user_id=current_user.id,
         title=request.title,
-        bot_id=request.bot_id
+        bot_id=request.bot_id,
+        dashboard_id=request.dashboard_id
     )
     db.add(session)
     await db.commit()
@@ -174,6 +176,9 @@ async def stream_chat_message(
         else:
             raise HTTPException(status_code=404, detail="Bot configuration not found")
 
+    if getattr(request, "dashboard_id", None) is not None and session.dashboard_id != request.dashboard_id:
+        session.dashboard_id = request.dashboard_id
+
     user_msg = AIChatMessage(
         session_id=session_id,
         role="user",
@@ -194,11 +199,11 @@ async def stream_chat_message(
         # Merge overrides (dashboard settings) over default bot settings
         llm_config = {**bot_llm_config, **override_config}
         
-        base_url = llm_config.get("base_url") or bot_llm_config.get("base_url")
-        api_key = llm_config.get("api_key") or bot_llm_config.get("api_key")
-        model_name = llm_config.get("model_name") or bot_llm_config.get("model_name", "gpt-4o")
+        base_url = llm_config.get("base_url") or bot_llm_config.get("base_url") or os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE")
+        api_key = llm_config.get("api_key") or bot_llm_config.get("api_key") or os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        model_name = llm_config.get("model_name") or bot_llm_config.get("model_name") or os.getenv("LLM_MODEL_NAME") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4o"
         system_prompt = llm_config.get("system_prompt") or bot_llm_config.get("system_prompt", "You are a helpful assistant.")
-        api_type = llm_config.get("api_type") or bot_llm_config.get("api_type", "chat_completions")
+        api_type = llm_config.get("api_type") or bot_llm_config.get("api_type") or os.getenv("LLM_API_TYPE") or "chat_completions"
         custom_headers = llm_config.get("headers", {})
         if isinstance(custom_headers, str):
             try:
@@ -234,6 +239,43 @@ async def stream_chat_message(
                 active_tools = {}
                 tools_payload = []
                 
+                # Check if bot is in dashboard building mode
+                is_dashboard_builder = (bot.bot_id == "dashboard" or getattr(request, "dashboard_id", None) is not None or session.dashboard_id is not None)
+                if is_dashboard_builder:
+                    dash_tools = [
+                        "create_genie_dashboard",
+                        "add_chart_to_dashboard",
+                        "update_dashboard_layout",
+                        "update_dashboard_theme",
+                        "add_dashboard_filter",
+                        "delete_dashboard_widget",
+                        "auto_organize_dashboard"
+                    ]
+                    for t_name in dash_tools:
+                        t_instance = get_tool_instance(t_name, session_id=session_id)
+                        active_tools[t_instance.name] = t_instance
+                        tools_payload.append(t_instance.get_schema())
+
+                    system_prompt += (
+                        "\n\nYou are in Dashboard Building/Authoring Mode. You have the ability to autonomously create and modify dashboards, "
+                        "add visual charts/tables/KPIs, arrange widgets, apply themes, and manage top-level filters.\n"
+                        "Here is the workflow you MUST follow:\n"
+                        "1. If no dashboard exists yet (or you are asked to start one), run `create_genie_dashboard` first to initialize it.\n"
+                        "2. When adding a chart or KPI, run `run_sql_query` to verify you have the correct query, then "
+                        "run `add_chart_to_dashboard` with the appropriate `chart_type`, `query_config`, and grid dimension `w` and `h`.\n"
+                        "3. **Quick Insights / Auto Dashboard**: If the user asks for 'quick insights', 'create a dashboard for me', or similar broad requests, you must:\n"
+                        "   a. Carefully assess the available datasets and schema.\n"
+                        "   b. Identify the most important business metrics and interesting dimensions.\n"
+                        "   c. Iteratively use `run_sql_query` and `add_chart_to_dashboard` to create a robust, multi-chart dashboard (e.g., 2-3 KPIs, a time-series line chart, and a categorical bar/pie chart).\n"
+                        "   d. Ensure the dashboard is laid out logically by setting appropriate grid widths/heights, and finally invoke `auto_organize_dashboard` to perfect the layout.\n"
+                        "4. If the user wants to adjust layouts or move cards, run `update_dashboard_layout`.\n"
+                        "5. If the user wants to automatically tidy, organize or fix the layout grid without manually specifying coordinates, run `auto_organize_dashboard`.\n"
+                        "6. If the user wants to style the dashboard or switch themes, run `update_dashboard_theme`.\n"
+                        "7. If the user wants to add top-level filters, run `add_dashboard_filter`.\n"
+                        "8. If the user wants to delete a widget, run `delete_dashboard_widget`.\n"
+                        "Always output a helpful, concise summary of the changes you performed, and encourage the user to view the live preview."
+                    )
+                
                 if enable_sql_tool and dataset_ids:
                     sql_tool = get_tool_instance("run_sql_query", dataset_ids=dataset_ids, user_email=current_user.email)
                     active_tools[sql_tool.name] = sql_tool
@@ -249,6 +291,26 @@ async def stream_chat_message(
                 
                 from app.database import AsyncSessionLocal
                 async with AsyncSessionLocal() as local_db:
+                    # Fetch active dashboard context if exists
+                    active_dashboard = None
+                    dash_id_to_check = getattr(request, "dashboard_id", None) or session.dashboard_id
+                    if dash_id_to_check:
+                        dash_res = await local_db.execute(
+                            select(Dashboard).where(Dashboard.id == dash_id_to_check)
+                        )
+                        active_dashboard = dash_res.scalar_one_or_none()
+
+                    if active_dashboard:
+                        current_layout = active_dashboard.pages[0].get("layout", []) if active_dashboard.pages else (active_dashboard.layout or [])
+                        system_prompt += (
+                            f"\n\nActive Dashboard in context:\n"
+                            f"- Title: '{active_dashboard.title}'\n"
+                            f"- ID: {active_dashboard.id}\n"
+                            f"- Current Widgets/Layout: {current_layout}\n"
+                            f"IMPORTANT: The dashboard already exists. Do NOT call `create_genie_dashboard` again. "
+                            f"Directly add, update, or remove widgets on this active dashboard."
+                        )
+
                     history_result = await local_db.execute(
                         select(AIChatMessage)
                         .where(AIChatMessage.session_id == session_id)
@@ -259,7 +321,38 @@ async def stream_chat_message(
                     
                     messages = [{"role": "system", "content": system_prompt}]
                     for m in history:
-                        messages.append({"role": "user" if m.role == "user" else "assistant", "content": m.content})
+                        if m.role == "user":
+                            messages.append({"role": "user", "content": m.content})
+                        else:
+                            assistant_msg = {"role": "assistant", "content": m.content or ""}
+                            formatted_calls = []
+                            if m.tool_calls:
+                                for tc in m.tool_calls:
+                                    if "function" in tc:
+                                        formatted_calls.append(tc)
+                                    else:
+                                        formatted_calls.append({
+                                            "id": tc.get("id"),
+                                            "type": "function",
+                                            "function": {
+                                                "name": tc.get("name"),
+                                                "arguments": tc.get("arguments")
+                                            }
+                                        })
+                            if formatted_calls:
+                                assistant_msg["tool_calls"] = formatted_calls
+                            messages.append(assistant_msg)
+                            
+                            # Append associated tool results
+                            if m.tool_results:
+                                for res in m.tool_results:
+                                    messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": res.get("tool_call_id"),
+                                        "name": res.get("name"),
+                                        "content": res.get("result")
+                                    })
+                                    
                     if not any(m.content == request.content for m in history):
                         messages.append({"role": "user", "content": request.content})
                 
@@ -477,11 +570,11 @@ async def add_chat_message(
     
     # 3. Resolve AI Response (Real LLM or Mock)
     llm_config = bot.llm_config or {}
-    base_url = llm_config.get("base_url")
-    api_key = llm_config.get("api_key")
-    model_name = llm_config.get("model_name", "gpt-4o")
+    base_url = llm_config.get("base_url") or os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE")
+    api_key = llm_config.get("api_key") or os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+    model_name = llm_config.get("model_name") or os.getenv("LLM_MODEL_NAME") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4o"
     system_prompt = llm_config.get("system_prompt", "You are a helpful assistant.")
-    api_type = llm_config.get("api_type") or llm_config.get("api_type", "chat_completions")
+    api_type = llm_config.get("api_type") or os.getenv("LLM_API_TYPE") or "chat_completions"
     custom_headers = llm_config.get("headers", {})
 
     ai_content = ""

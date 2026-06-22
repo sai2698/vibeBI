@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, Shield, UserCog, LayoutDashboard, Database, Settings, LogOut, Terminal, BarChart3, Clock, Bot, Layers, Globe, Plus, Mail, Code2, Compass } from 'lucide-react';
+import { Users, Shield, UserCog, LayoutDashboard, Database, Settings, LogOut, Terminal, BarChart3, Clock, Bot, Layers, Globe, Plus, Mail, Code2, Compass, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useThemeStore } from '../../store/useThemeStore';
 
@@ -21,6 +21,7 @@ const Sidebar: React.FC = () => {
     { name: 'Code Playground', path: '/charts/playground', icon: <Code2 size={18} />, permission: 'menu:chart_builder' },
     { name: 'SQL Lab', path: '/sqllab', icon: <Terminal size={18} />, permission: 'menu:sqllab' },
     { name: 'AI Workspace', path: '/ai', icon: <Bot size={18} />, permission: 'menu:ai_workspace' },
+    { name: 'Genie Spaces', path: '/genie', icon: <Sparkles size={18} />, permission: 'menu:ai_workspace' },
     { name: 'Datasources', path: '/data/datasources', icon: <Database size={18} />, permission: 'menu:data_management' },
     { name: 'Datasets', path: '/data/datasets', icon: <Database size={18} />, permission: 'menu:data_management' },
     { name: 'Semantic Layer', path: '/data/semantic', icon: <Layers size={18} />, permission: 'menu:data_management' },

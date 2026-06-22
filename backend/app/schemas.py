@@ -520,6 +520,7 @@ class AIChatSessionSchema(BaseModel):
     id: UUID4
     title: str
     bot_id: Optional[str] = None
+    dashboard_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     messages: List[AIChatMessageSchema] = []
@@ -530,6 +531,7 @@ class AIChatSessionSchema(BaseModel):
 class AIChatSessionCreate(BaseModel):
     title: Optional[str] = "New Conversation"
     bot_id: Optional[str] = "query"
+    dashboard_id: Optional[int] = None
 
 class AIChatMessageCreate(BaseModel):
     content: str
@@ -537,6 +539,7 @@ class AIChatMessageCreate(BaseModel):
     context_dataset_ids: Optional[List[int]] = None
     llm_config_override: Optional[dict] = None
     dashboard_name: Optional[str] = None
+    dashboard_id: Optional[int] = None
 
 class AIBotSchema(BaseModel):
     id: UUID4

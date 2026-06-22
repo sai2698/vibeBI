@@ -48,8 +48,8 @@ const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
       {/* Pill and Reset */}
       {drillStack.length > 0 && (
         <>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-xs font-bold h-9 bg-brand/10 border-brand text-brand hover:bg-brand/15">
-            <Layers size={12} className="text-brand flex-shrink-0" />
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all text-[11px] font-bold h-7 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700/60 shadow-sm text-brand hover:bg-slate-50 dark:hover:bg-slate-750">
+            <Layers size={10} className="text-brand flex-shrink-0" />
 
             {/* Root level */}
             <button
@@ -165,7 +165,7 @@ const DrillBreadcrumbs: React.FC<DrillBreadcrumbsProps> = ({
 
           {/* Reset button */}
           <button
-            className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors whitespace-nowrap"
+            className="px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors whitespace-nowrap h-7"
             onClick={onResetDrill}
             title="Reset all drills"
           >

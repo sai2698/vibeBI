@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Brain, Check, Loader2, Wrench, ChevronDown, BarChart3 } from 'lucide-react';
+import { Brain, Check, Loader2, ChevronDown, BarChart3 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -98,26 +98,26 @@ const ToolCallItem = React.memo<ToolCallItemProps>(({ tc, result }) => {
     const isChartTool = tc.name === 'render_chart';
 
     return (
-        <div className="border-b border-slate-100/50 dark:border-slate-800/50 last:border-0">
+        <div className="mb-2">
             {/* Chart: skeleton while streaming, real chart when done */}
             {isChartTool && !tc.done && <ChartSkeleton />}
             {isChartTool && tc.done && <CompletedChart args={tc.args} />}
 
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors text-left"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors text-left"
             >
                 {tc.done ? <Check size={12} className="text-emerald-500 shrink-0" /> : <Loader2 size={12} className="animate-spin text-brand shrink-0" />}
-                <Wrench size={12} className="text-slate-500 dark:text-slate-400 shrink-0" />
-                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 font-mono">{tc.name}</span>
-                <ChevronDown size={14} className={`ml-auto text-slate-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                <span className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                    {tc.done ? "Used tool:" : "Using tool:"} <span className="font-mono text-slate-800 dark:text-slate-200">{tc.name}</span>
+                </span>
+                <ChevronDown size={12} className={`ml-1 text-slate-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
             </button>
             {isExpanded && (
-                <div>
-                    {tc.args && <pre className="px-4 py-2 text-[10px] font-mono text-slate-500 bg-slate-50 dark:bg-slate-900/50 overflow-x-auto custom-scrollbar whitespace-pre-wrap break-all">{tc.args}</pre>}
+                <div className="ml-3 mt-1 pl-4 border-l-2 border-slate-100 dark:border-slate-800/50">
+                    {tc.args && <pre className="py-2 text-[10px] font-mono text-slate-500 dark:text-slate-400 overflow-x-auto custom-scrollbar whitespace-pre-wrap break-all">{tc.args}</pre>}
                     {result && (
-                        <div className="px-4 py-2 border-t border-slate-100/50 dark:border-slate-800/50">
-                            <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">Result</div>
+                        <div className="py-2 mt-1 border-t border-slate-100/50 dark:border-slate-800/50 overflow-hidden">
                             <div className="overflow-x-auto max-h-48 custom-scrollbar text-[11px] text-slate-600 dark:text-slate-400">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{result.result}</ReactMarkdown>
                             </div>
@@ -203,18 +203,18 @@ const ThinkingSection = React.memo<{
     if (!isThinking && !thinkingText) return null;
 
     return (
-        <div className="border-b border-slate-100/50 dark:border-slate-800/50 last:border-0 bg-amber-50/30 dark:bg-amber-950/10">
+        <div className="mb-2">
             <button
                 onClick={onToggle}
-                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-amber-100/30 dark:hover:bg-amber-900/20 transition-colors text-left"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors text-left"
             >
-                <Brain size={12} className="text-amber-500 shrink-0" />
-                <span className="text-[11px] font-bold text-amber-700/80 dark:text-amber-400/80 uppercase tracking-wider">Thought Process</span>
-                <ChevronDown size={14} className={`ml-auto text-amber-400/70 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                {isThinking ? <Loader2 size={12} className="animate-spin text-slate-500 shrink-0" /> : <Brain size={12} className="text-slate-500 shrink-0" />}
+                <span className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Thought process</span>
+                <ChevronDown size={12} className={`ml-1 text-slate-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
             </button>
             {isExpanded && thinkingText && (
-                <div className="px-4 pb-3">
-                    <div className="mt-1 max-h-48 overflow-y-auto custom-scrollbar text-xs text-amber-800/70 dark:text-amber-200/60 font-mono leading-relaxed whitespace-pre-wrap">
+                <div className="ml-3 mt-1 pl-4 border-l-2 border-slate-100 dark:border-slate-800/50">
+                    <div className="max-h-48 overflow-y-auto custom-scrollbar text-[11px] text-slate-500 dark:text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">
                         {thinkingText}
                     </div>
                 </div>
@@ -282,30 +282,7 @@ const AIStreamingBlock: React.FC<AIStreamingBlockProps> = ({
                 <div className="space-y-2 min-w-0 flex-1">
                     {/* ── Agentic Engine Block ── */}
                     {hasAgenticContent && (
-                        <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 overflow-hidden shadow-sm">
-                            <div className="px-4 py-2.5 flex items-center justify-between bg-white/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800/60">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800">
-                                        {isThinking ? (
-                                            <Loader2 size={10} className="animate-spin text-brand" />
-                                        ) : toolCalls.some(tc => !tc.done) ? (
-                                            <Loader2 size={10} className="animate-spin text-brand" />
-                                        ) : !streamingMessage ? (
-                                            <div className="flex gap-1 py-1">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
-                                                <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
-                                                <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
-                                            </div>
-                                        ) : (
-                                            <Check size={10} className="text-emerald-500" />
-                                        )}
-                                    </div>
-                                    <div className="text-[10px] font-bold text-slate-400 px-1 text-left">
-                                        {statusText}
-                                    </div>
-                                </div>
-                            </div>
-
+                        <div className="flex flex-col mb-2">
                             {/* Thinking Section */}
                             <ThinkingSection
                                 isThinking={isThinking}
@@ -325,11 +302,13 @@ const AIStreamingBlock: React.FC<AIStreamingBlockProps> = ({
                     )}
 
                     {/* ── Main Response Content ── */}
-                    <div className="rounded-2xl px-6 py-4 leading-relaxed bg-transparent text-slate-800 dark:text-slate-200 text-left">
+                    <div className="bg-transparent text-slate-800 dark:text-slate-200 text-left pt-1">
                         {streamingMessage ? (
-                            <DebouncedMarkdown content={streamingMessage} isActive={isActivelyStreaming} />
+                            <div className="prose-slate dark:prose-invert">
+                                <DebouncedMarkdown content={streamingMessage} isActive={isActivelyStreaming} />
+                            </div>
                         ) : !isThinking && toolCalls.length === 0 ? (
-                            <div className="flex gap-1 py-1">
+                            <div className="flex gap-1 py-1 px-4">
                                 <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
                                 <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
                                 <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />

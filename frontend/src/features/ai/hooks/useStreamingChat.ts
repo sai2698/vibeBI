@@ -208,7 +208,7 @@ export function useStreamingChat(options: UseStreamingChatOptions = {}): UseStre
 
     // 4. Optimistic cache update (add user message to session)
     if (activeSessionId) {
-      queryClient.setQueryData(['ai-sessions', activeSessionId], (old: any) => {
+      const updateSession = (old: any) => {
         if (!old) return { id: activeSessionId, messages: [{ id: 'temp-user-' + Date.now(), role: 'user', content: userContent, created_at: new Date().toISOString() }] };
         return {
           ...old,
@@ -217,7 +217,10 @@ export function useStreamingChat(options: UseStreamingChatOptions = {}): UseStre
             { id: 'temp-user-' + Date.now(), role: 'user', content: userContent, created_at: new Date().toISOString() }
           ]
         };
-      });
+      };
+      
+      queryClient.setQueryData(['ai-sessions', activeSessionId], updateSession);
+      queryClient.setQueryData(['genie-sessions', activeSessionId], updateSession);
     }
 
     // 5. Clear pending message now that it's in the cache
@@ -388,7 +391,7 @@ export function useStreamingChat(options: UseStreamingChatOptions = {}): UseStre
 
       // Add AI message to cache
       if (activeSessionId) {
-        queryClient.setQueryData(['ai-sessions', activeSessionId], (old: any) => {
+        const updateSession = (old: any) => {
           if (!old) return old;
           return {
             ...old,
@@ -405,7 +408,9 @@ export function useStreamingChat(options: UseStreamingChatOptions = {}): UseStre
               }
             ]
           };
-        });
+        };
+        queryClient.setQueryData(['ai-sessions', activeSessionId], updateSession);
+        queryClient.setQueryData(['genie-sessions', activeSessionId], updateSession);
       }
 
       // Reset all state
@@ -432,6 +437,8 @@ export function useStreamingChat(options: UseStreamingChatOptions = {}): UseStre
       if (activeSessionId) {
         queryClient.invalidateQueries({ queryKey: ['ai-sessions', activeSessionId] });
         queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+        queryClient.invalidateQueries({ queryKey: ['genie-sessions', activeSessionId] });
+        queryClient.invalidateQueries({ queryKey: ['genie-sessions'] });
       }
     }
 

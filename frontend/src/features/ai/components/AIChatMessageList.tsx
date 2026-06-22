@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Brain, User, Check, Wrench, ChevronDown, BarChart3 } from 'lucide-react';
+import { Brain, Check, ChevronDown, BarChart3 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -75,23 +75,21 @@ const HistoricalToolItem = React.memo<{
     const isChartTool = tc.name === 'render_chart';
 
     return (
-        <div className="border-b border-slate-100/50 dark:border-slate-800/50 last:border-0">
+        <div className="mb-2">
             {isChartTool && tc.arguments && <HistoricalChart argsJson={tc.arguments} />}
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors text-left"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors text-left"
             >
                 <Check size={12} className="text-emerald-500 shrink-0" />
-                <Wrench size={12} className="text-slate-500 dark:text-slate-400 shrink-0" />
-                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 font-mono">{tc.name}</span>
-                <ChevronDown size={14} className={`ml-auto text-slate-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                <span className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Used tool: <span className="font-mono text-slate-800 dark:text-slate-200">{tc.name}</span></span>
+                <ChevronDown size={12} className={`ml-1 text-slate-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
             </button>
             {isExpanded && (
-                <div>
-                    {tc.arguments && <pre className="px-4 py-2 text-[10px] font-mono text-slate-500 bg-slate-50 dark:bg-slate-900/50 overflow-x-auto custom-scrollbar whitespace-pre-wrap break-all">{tc.arguments}</pre>}
+                <div className="ml-3 mt-1 pl-4 border-l-2 border-slate-100 dark:border-slate-800/50">
+                    {tc.arguments && <pre className="py-2 text-[10px] font-mono text-slate-500 dark:text-slate-400 overflow-x-auto custom-scrollbar whitespace-pre-wrap break-all">{tc.arguments}</pre>}
                     {result && (
-                        <div className="px-4 py-2 border-t border-slate-100/50 dark:border-slate-800/50 overflow-hidden">
-                            <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">Result</div>
+                        <div className="py-2 mt-1 border-t border-slate-100/50 dark:border-slate-800/50 overflow-hidden">
                             <div className="overflow-x-auto max-h-64 custom-scrollbar text-[11px] text-slate-600 dark:text-slate-400">
                                 <div className="markdown-container text-xs">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={TOOL_RESULT_MD_COMPONENTS}>{result.result}</ReactMarkdown>
@@ -111,25 +109,41 @@ HistoricalToolItem.displayName = 'HistoricalToolItem';
 const MessageRow = React.memo<{ msg: Message; activeBot: AIBot }>(({ msg, activeBot }) => {
     const hasAgenticContent = msg.role === 'ai' && (msg.reasoning_content || (msg.tool_calls && msg.tool_calls.length > 0));
 
-    return (
-        <div className="w-full flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="flex gap-4 w-full max-w-3xl">
-                <div className={`shrink-0 w-8 h-8 mt-1 rounded-xl flex items-center justify-center shadow-sm ${msg.role === 'ai' ? `${activeBot.avatar_config.color} text-white` : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700'
-                    }`}>
-                    {msg.role === 'ai' ? (ICON_MAP[activeBot.avatar_config.icon] || <Brain size={16} />) : <User size={16} />}
+    if (msg.role === 'user') {
+        return (
+            <div className="w-full flex justify-end animate-in fade-in slide-in-from-bottom-4 duration-300 mb-6">
+                <div className="flex justify-end w-full max-w-3xl pl-12">
+                    <div className="rounded-[20px] rounded-tr-sm px-5 py-3.5 leading-relaxed bg-[#e1effe] dark:bg-indigo-900/40 text-slate-900 dark:text-slate-100 shadow-sm inline-block">
+                        <div className="markdown-container">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeRaw]}
+                                components={MARKDOWN_COMPONENTS}
+                            >
+                                {msg.content}
+                            </ReactMarkdown>
+                        </div>
+                    </div>
                 </div>
-                <div className="space-y-1.5 min-w-0 flex-1">
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full flex justify-start animate-in fade-in slide-in-from-bottom-4 duration-300 mb-8">
+            <div className="flex gap-4 w-full max-w-3xl">
+                <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-sm ${activeBot.avatar_config.color} text-white`}>
+                    {ICON_MAP[activeBot.avatar_config.icon] || <Brain size={16} />}
+                </div>
+                <div className="space-y-3 min-w-0 flex-1 pt-1">
                     {/* Agentic Engine Block (Historical) */}
                     {hasAgenticContent && (
                         <AgenticBlock msg={msg} />
                     )}
 
-                    {/* Main content bubble */}
-                    <div className={`rounded-2xl px-6 py-4 leading-relaxed ${msg.role === 'user'
-                        ? 'bg-slate-50 dark:bg-slate-800/40 text-slate-800 dark:text-slate-200'
-                        : 'bg-transparent text-slate-800 dark:text-slate-200'
-                        }`}>
-                        <div className="markdown-container overflow-x-auto">
+                    {/* Main content */}
+                    <div className="bg-transparent text-slate-800 dark:text-slate-200">
+                        <div className="markdown-container overflow-x-auto prose-slate dark:prose-invert">
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 rehypePlugins={[rehypeRaw]}
@@ -155,36 +169,23 @@ MessageRow.displayName = 'MessageRow';
 
 const AgenticBlock = React.memo<{ msg: Message }>(({ msg }) => {
     const [isReasoningExpanded, setIsReasoningExpanded] = useState(false);
-    const toolCallCount = msg.tool_calls?.length || 0;
 
     return (
-        <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 overflow-hidden shadow-sm">
-            {/* Header */}
-            <div className="px-4 py-2.5 flex items-center justify-between bg-white/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800/60">
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 text-emerald-500">
-                        <Check size={10} />
-                    </div>
-                    <div className="text-[10px] font-bold text-slate-400 px-1 text-left uppercase tracking-wider">
-                        {toolCallCount > 0 ? `Completed ${toolCallCount} Tool${toolCallCount > 1 ? 's' : ''}` : 'Reasoning Completed'}
-                    </div>
-                </div>
-            </div>
-
+        <div className="flex flex-col mb-4">
             {/* Reasoning Stream (Historical) */}
             {msg.reasoning_content && (
-                <div className="border-b border-slate-100/50 dark:border-slate-800/50 last:border-0 bg-amber-50/30 dark:bg-amber-950/10">
+                <div className="mb-2">
                     <button
                         onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
-                        className="w-full flex items-center gap-2 px-4 py-2 hover:bg-amber-100/30 dark:hover:bg-amber-900/20 transition-colors text-left"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors text-left"
                     >
-                        <Brain size={12} className="text-amber-500 shrink-0" />
-                        <span className="text-[11px] font-bold text-amber-700/80 dark:text-amber-400/80 uppercase tracking-wider">Thought Process</span>
-                        <ChevronDown size={14} className={`ml-auto text-amber-400/70 shrink-0 transition-transform ${isReasoningExpanded ? 'rotate-180' : ''}`} />
+                        <Brain size={12} className="text-slate-500 dark:text-slate-400 shrink-0" />
+                        <span className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Thought process</span>
+                        <ChevronDown size={12} className={`ml-1 text-slate-400 shrink-0 transition-transform ${isReasoningExpanded ? 'rotate-180' : ''}`} />
                     </button>
                     {isReasoningExpanded && (
-                        <div className="px-4 pb-3">
-                            <div className="mt-1 max-h-48 overflow-y-auto custom-scrollbar text-xs text-amber-800/70 dark:text-amber-200/60 font-mono leading-relaxed whitespace-pre-wrap">
+                        <div className="ml-3 mt-1 pl-4 border-l-2 border-slate-100 dark:border-slate-800/50">
+                            <div className="max-h-48 overflow-y-auto custom-scrollbar text-[11px] text-slate-500 dark:text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">
                                 {msg.reasoning_content}
                             </div>
                         </div>

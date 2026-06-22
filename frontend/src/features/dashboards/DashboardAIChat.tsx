@@ -180,14 +180,11 @@ const DashboardAIChat: React.FC<DashboardAIChatProps> = ({
 
                 {/* Instant pending user message */}
                 {pendingUserMessage && (
-                  <div className="w-full flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-200">
-                    <div className="flex gap-4 w-full max-w-3xl">
-                      <div className="shrink-0 w-8 h-8 mt-1 rounded-xl flex items-center justify-center shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700">
-                        <User size={16} />
-                      </div>
-                      <div className="space-y-1.5 min-w-0 flex-1">
-                        <div className="rounded-2xl px-6 py-4 leading-relaxed bg-slate-50 dark:bg-slate-800/40 text-slate-800 dark:text-slate-200">
-                          <p className="text-[13px]">{pendingUserMessage}</p>
+                  <div className="w-full flex justify-end animate-in fade-in slide-in-from-bottom-4 duration-200 mb-6">
+                    <div className="flex justify-end w-full max-w-3xl pl-12">
+                      <div className="rounded-[20px] rounded-tr-sm px-5 py-3.5 leading-relaxed bg-[#e1effe] dark:bg-indigo-900/40 text-slate-900 dark:text-slate-100 shadow-sm inline-block">
+                        <div className="markdown-container">
+                          <p className="mb-0 text-[13px] whitespace-pre-wrap">{pendingUserMessage}</p>
                         </div>
                       </div>
                     </div>

@@ -23,6 +23,7 @@ import RLSManagementPage from './features/settings/RLSManagementPage';
 import AuditLogPage from './features/audit/AuditLogPage';
 import SchedulerPage from './features/scheduler/SchedulerPage';
 import AIWorkspacePage from './features/ai/AIWorkspacePage';
+import GenieWorkspacePage from './features/genie/GenieWorkspacePage';
 import SemanticLayerPage from './features/data/SemanticLayerPage';
 import DataflowBuilder from './features/datasets/DataflowBuilder';
 import MailerPage from './features/mailer/MailerPage';
@@ -70,6 +71,7 @@ const App: React.FC = () => {
                   <Route path="/scheduler" element={<ProtectedRoute requiredPermission="menu:dashboards"><SchedulerPage /></ProtectedRoute>} />
                   <Route path="/mailer" element={<ProtectedRoute requiredPermission="menu:dashboards"><MailerPage /></ProtectedRoute>} />
                   <Route path="/ai" element={<ProtectedRoute requiredPermission="menu:ai_workspace"><AIWorkspacePage /></ProtectedRoute>} />
+                  <Route path="/genie" element={<ProtectedRoute requiredPermission="menu:ai_workspace"><GenieWorkspacePage /></ProtectedRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppShell>

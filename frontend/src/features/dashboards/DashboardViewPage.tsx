@@ -1567,7 +1567,7 @@ const DashboardViewPage: React.FC = () => {
       )}
 
       {/* Drill Filter Bar Portal Target */}
-      <div id="drill-bar-portal" className="flex flex-wrap items-center gap-2 px-4 bg-slate-50 border-slate-100 empty:hidden z-10 sticky top-[57px] backdrop-blur-sm shadow-sm py-2 border-b"></div>
+      <div id="drill-bar-portal" className="flex flex-wrap items-center gap-2 px-4 bg-slate-50 border-slate-100 empty:hidden z-[100] sticky top-[57px] backdrop-blur-sm shadow-sm py-2 border-b"></div>
 
       {/* Grid Container */}
       <div

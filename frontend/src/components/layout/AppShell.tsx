@@ -24,7 +24,7 @@ const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const isChartListPage = matchPath('/charts', location.pathname);
   const isDatamartExplorer = matchPath('/self-service/:id', location.pathname);
 
-  const isNoSidebarView = isDashboardView || isSqlLab || isChartBuilder || matchPath('/ai', location.pathname) || isSemanticLayer || isDataflow || isChartListPage || isDatamartExplorer;
+  const isNoSidebarView = isDashboardView || isSqlLab || isChartBuilder || matchPath('/ai', location.pathname) || matchPath('/genie', location.pathname) || isSemanticLayer || isDataflow || isChartListPage || isDatamartExplorer;
   const isFullWidthView = isNoSidebarView;
 
   const { data: lobs, isLoading } = useQuery({
